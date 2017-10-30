@@ -645,7 +645,7 @@ const Exchange = function (config) {
         }
 
         if (this.verbose)
-            console.log (this.id, method, url, "\nRequest:\n", headers, body)
+            this.verboseLogger (this.id, 'Request:', method, url, method === 'POST' && body ? body : undefined) // MJM
 
         return issueRestRequest (url, method, headers, body)
     }
@@ -667,12 +667,13 @@ const Exchange = function (config) {
 
         return response.text ().then (text => {
             if (this.verbose)
-                console.log (this.id, method, url, text ? ("\nResponse:\n" + text) : '')
+                this.verboseLogger (this.id, 'Request:', method, url, method === 'POST' && body ? body : undefined) // MJM
             if ((response.status >= 200) && (response.status <= 300))
                 return text
             let error = undefined
             this.last_http_response = text
             let details = text
+            details = details.replace(/(<.DOCTYPE html>)[^]*/, '$1 ...') // MJM (body can be very large and useless)
             if ([ 429 ].includes (response.status)) {
                 error = DDoSProtection
             } else if ([ 404, 409, 422, 500, 501, 502, 520, 521, 522, 525 ].includes (response.status)) {
@@ -716,6 +717,7 @@ const Exchange = function (config) {
         } catch (e) {
 
             let maintenance = response.match (/offline|busy|retry|wait|unavailable|maintain|maintenance|maintenancing/i)
+            maintenance = maintenance && !response.match(/Notice.*Automated Maiintenance/) // MJM
             let ddosProtection = response.match (/cloudflare|incapsula|overload/i)
 
             if (e instanceof SyntaxError) {
@@ -730,7 +732,7 @@ const Exchange = function (config) {
             }
 
             if (this.verbose)
-                console.log (this.id, method, url, 'error', e, "response body:\n'" + response + "'")
+                this.verboseLogger (this.id, 'Response body:', method, url, {error: e, body}) // MJM
 
             throw e
         }
@@ -1034,12 +1036,19 @@ const Exchange = function (config) {
     this.seconds         = () => Math.floor (this.milliseconds () / 1000)
     this.microseconds    = () => Math.floor (this.milliseconds () * 1000)
     this.milliseconds    = Date.now
-    this.nonce           = this.seconds
+    this.lastNonce      = 0  // MJM
+    this.nonce          = function () { // MJM
+        let nonce = (['binance', 'bitfinex', 'bittrex', 'yunbi'].includes(this.name.toLowerCase())) ? this.milliseconds() : this.seconds()
+        if (nonce <= this.lastNonce) { nonce = this.lastNonce + 1 }
+        this.lastNonce = nonce
+        return nonce
+    }
     this.id              = undefined
     this.enableRateLimit = false
     this.rateLimit       = 2000  // milliseconds = seconds * 1000
     this.timeout         = 10000 // milliseconds
     this.verbose         = false
+    this.verboseLogger   = console.error // MJM
     this.userAgent       = false
     this.twofa           = false // two-factor authentication (2FA)
     this.substituteCommonCurrencyCodes = true
@@ -3899,6 +3908,10 @@ var bitfinex = {
             // issue #4 Bitfinex names Dash as DSH, instead of DASH
             if (base == 'DSH')
                 base = 'DASH';
+            if (base == 'QTM') // MJM
+                base = 'QTUM'; // MJM
+            if (base == 'IOT') // MJM
+                base = 'IOTA'; // MJM
             let symbol = base + '/' + quote;
             let precision = {
                 'price': market['price_precision'],
@@ -3929,6 +3942,10 @@ var bitfinex = {
                 // issue #4 Bitfinex names dash as dsh
                 if (uppercase == 'DSH')
                     uppercase = 'DASH';
+                if (uppercase == 'QTM') // MJM
+                    uppercase = 'QTUM'; // MJM
+                if (uppercase == 'IOT') // MJM
+                    uppercase = 'IOTA'; // MJM
                 let account = this.account ();
                 account['free'] = parseFloat (balance['available']);
                 account['total'] = parseFloat (balance['amount']);
@@ -4174,6 +4191,7 @@ var bitfinex = {
                 'nonce': nonce.toString (),
                 'request': request,
             }, query);
+            if (this.verbose) this.verboseLogger(this.id + ' request query:', query) // MJM
             query = this.json (query);
             query = this.encode (query);
             let payload = this.stringToBase64 (query);
@@ -4338,6 +4356,10 @@ var bitfinex2 = extend (bitfinex, {
             // issue #4 Bitfinex names Dash as DSH, instead of DASH
             if (uppercase == 'DSH')
                 uppercase = 'DASH';
+            if (uppercase == 'QTM') // MJM
+                uppercase = 'QTUM'; // MJM
+            if (uppercase == 'IOT') // MJM
+                uppercase = 'IOTA'; // MJM
             let account = this.account ();
             account['free'] = available;
             account['total'] = total;
@@ -6813,6 +6835,7 @@ var bittrex = {
         let indexed = this.indexBy (balances, 'Currency');
         for (let c = 0; c < this.currencies.length; c++) {
             let currency = this.currencies[c];
+            if (currency == 'BCH') currency = 'BCC' // MJM
             let account = this.account ();
             if (currency in indexed) {
                 let balance = indexed[currency];
@@ -6823,6 +6846,7 @@ var bittrex = {
                 account['used'] = used;
                 account['total'] = total;
             }
+            if (currency == 'BCC') currency = 'BCH' // MJM
             result[currency] = account;
         }
         return this.parseBalance (result);
@@ -17805,8 +17829,8 @@ var luno = {
             'datetime': this.iso8601 (timestamp),
             'high': undefined,
             'low': undefined,
-            'bid': parseFloat (ticker['bid']),
-            'ask': parseFloat (ticker['ask']),
+            'bid': parseFloat (ticker['bid']), // MJM no edit okay? or ticker['buy']?
+            'ask': parseFloat (ticker['ask']), // MJM no edit okay? or ticker['sell']?
             'vwap': undefined,
             'open': undefined,
             'close': undefined,
@@ -17919,6 +17943,7 @@ var luno = {
     async request (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
         let response = await this.fetch2 (path, api, method, params, headers, body);
         if ('error' in response)
+          if (response['error'] !== 'no orders') // MJM
             throw new ExchangeError (this.id + ' ' + this.json (response));
         return response;
     },
