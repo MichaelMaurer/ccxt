@@ -29,3 +29,9 @@ Liqui "no orders" response
 --------------------------
 origin: throws error if error='no orders'
 patch: edit liqui.js handleErrors() to tolerate
+
+Binance fetchTickers()
+----------------------
+Default implementation filters out ticker data for symbols not requested.
+This can cause arby to repeatedly poll fetchTickers() on startup.
+Easiest solution: do not filter.

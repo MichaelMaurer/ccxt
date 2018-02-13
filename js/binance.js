@@ -521,7 +521,7 @@ module.exports = class binance extends Exchange {
     async fetchTickers (symbols = undefined, params = {}) {
         await this.loadMarkets ();
         let rawTickers = await this.publicGetTicker24hr (params);
-        return this.parseTickers (rawTickers, symbols);
+        return this.parseTickers (rawTickers); // MJM removed filter by symbols
     }
 
     parseOHLCV (ohlcv, market = undefined, timeframe = '1m', since = undefined, limit = undefined) {
