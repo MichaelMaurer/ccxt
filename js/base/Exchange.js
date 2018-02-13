@@ -168,6 +168,7 @@ module.exports = class Exchange {
         this.parse8601        = x => Date.parse (((x.indexOf ('+') >= 0) || (x.slice (-1) === 'Z')) ? x : (x + 'Z'))
         this.microseconds     = () => now () * 1000 // TODO: utilize performance.now for that purpose
         this.seconds          = () => Math.floor (now () / 1000)
+        this.lastNonce        = 0 // MJM
 
         this.substituteCommonCurrencyCodes = true  // reserved
 
@@ -176,6 +177,7 @@ module.exports = class Exchange {
 
         this.timeout          = 10000 // milliseconds
         this.verbose          = false
+        this.verboseLogger    = console.error // MJM
         this.debug            = false
         this.journal          = 'debug.json'
         this.userAgent        = undefined
@@ -237,8 +239,11 @@ module.exports = class Exchange {
         return { /* override me */ }
     }
 
-    nonce () {
-        return this.seconds ()
+    nonce () { // MJM
+        let nonce = (['binance', 'bitfinex', 'bittrex', 'yunbi'].includes(this.name.toLowerCase())) ? this.milliseconds() : this.seconds()
+        if (nonce <= this.lastNonce) { nonce = this.lastNonce + 1 }
+        this.lastNonce = nonce
+        return nonce
     }
 
     milliseconds () {
@@ -359,7 +364,8 @@ module.exports = class Exchange {
         headers = extend (this.headers, headers)
 
         if (this.verbose)
-            console.log ("fetch:\n", this.id, method, url, "\nRequest:\n", headers, "\n", body, "\n")
+            // console.log ("fetch:\n", this.id, method, url, "\nRequest:\n", headers, "\n", body, "\n")
+            this.verboseLogger (this.id, 'Request:', method, url, method === 'POST' ? body : undefined) // MJM
 
         return this.executeRestRequest (url, method, headers, body)
     }
@@ -384,7 +390,7 @@ module.exports = class Exchange {
 
         } catch (e) {
 
-            if (this.verbose)
+            if (this.verbose && false) // MJM
                 console.log ('parseJson:\n', this.id, method, url, response.status, 'error', e, "response body:\n'" + responseBody + "'\n")
 
             let title = undefined
@@ -460,7 +466,8 @@ module.exports = class Exchange {
             let json = jsonRequired ? this.parseJson (response, responseBody, url, method) : undefined
 
             if (this.verbose)
-                console.log ("handleRestResponse:\n", this.id, method, url, response.status, response.statusText, "\nResponse:\n", requestHeaders, "\n", responseBody, "\n")
+                // console.log ("handleRestResponse:\n", this.id, method, url, response.status, response.statusText, "\nResponse:\n", requestHeaders, "\n", responseBody, "\n")
+                this.verboseLogger (this.id, 'Response:', method, url, response.status, response.statusText, responseBody ? '\n' + responseBody : '') // MJM
 
             this.last_http_response = responseBody // FIXME: for those classes that haven't switched to handleErrors yet
             this.last_json_response = json         // FIXME: for those classes that haven't switched to handleErrors yet

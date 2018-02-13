@@ -1,0 +1,31 @@
+Migrating to ccxt 1.10.1094
+===========================
+
+Verbose logging
+---------------
+base/Exchange.js fetch()
+base/Exchange.js handleRestResponse()
+  origin: calls console.log()
+  patch: base/Exchange.js: add this.verboseLogger, call that in same place
+js/bitfinex.js sign()
+  patch: log query params before they are encoded into header
+
+Nonce
+-----
+origin: uses second() or millisecond(), no guarantee of uniqueness/monotonicity
+patch: use millisecond() but increment until > previous
+
+Symbol names
+------------
+BCH|BCC, QTM|QTUM, IOT|IOTA
+origin: BCH is preferred code for Bitcoin Cash
+        commonCurrencyCode() handles BCC|BCH, XBT|BTC
+        bitfinex.js handles DSH, QTM, IOT, DAT, including in fetchBalance() etc
+        bittrex.js handles BCH|BCC
+        liqui.js handles BCH|BCC
+patch: no changes, handle any exceptional cases outside of ccxt
+
+Liqui "no orders" response
+--------------------------
+origin: throws error if error='no orders'
+patch: edit liqui.js handleErrors() to tolerate

@@ -723,6 +723,7 @@ module.exports = class bitfinex extends Exchange {
                 'nonce': nonce.toString (),
                 'request': request,
             }, query);
+            if (this.verbose) this.verboseLogger(this.id, 'Request params:', query) // MJM
             query = this.json (query);
             query = this.encode (query);
             let payload = this.stringToBase64 (query);
