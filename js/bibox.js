@@ -174,7 +174,7 @@ module.exports = class bibox extends Exchange {
         for (let t = 0; t < tickers.length; t++) {
             let ticker = this.parseTicker (tickers[t]);
             let symbol = ticker['symbol'];
-            if (symbols && (!(symbol in symbols))) {
+            if (symbols && (!(symbols.includes(symbol))) && false) { // MJM fixed bug and removed filter
                 continue;
             }
             result[symbol] = ticker;

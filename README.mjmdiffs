@@ -35,3 +35,9 @@ Binance fetchTickers()
 Default implementation filters out ticker data for symbols not requested.
 This can cause arby to repeatedly poll fetchTickers() on startup.
 Easiest solution: do not filter.
+
+Bibox fetchTickers()
+--------------------
+Default implementation filters out ticker data for symbols not requested, and has a bug.
+This can cause arby to repeatedly poll fetchTickers() on startup.
+Easiest solution: do not filter.

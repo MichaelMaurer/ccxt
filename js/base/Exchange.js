@@ -475,6 +475,7 @@ module.exports = class Exchange {
             const args = [ response.status, response.statusText, url, method, requestHeaders, responseBody, json ]
             this.handleErrors (...args)
             this.defaultErrorHandler (response, responseBody, url, method)
+            // console.error('handleRestResponse returning', responseBody.substr(0,120), '...')// MJM
 
             return jsonRequired ? json : responseBody
         })
