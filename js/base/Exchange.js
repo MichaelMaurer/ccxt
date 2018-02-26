@@ -439,6 +439,7 @@ module.exports = class Exchange {
                 error = DDoSProtection
             } else {
                 error = ExchangeNotAvailable
+                if (false) // MJM
                 details += ' (possible reasons: ' + [
                     'invalid API keys',
                     'bad or old nonce',
