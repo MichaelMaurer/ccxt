@@ -694,6 +694,8 @@ module.exports = class bittrex extends Exchange {
                 throw new InsufficientFunds (this.id + ' ' + this.json (response));
             if (response['message'] === 'MIN_TRADE_REQUIREMENT_NOT_MET')
                 throw new InvalidOrder (this.id + ' ' + this.json (response));
+            if (response['message'].match(/WITHDRAWAL_LIMIT_REACHED/)) // MJM
+                throw new ExchangeError (this.id + ' ' + this.json (response)); // MJM
             if (response['message'] === 'APIKEY_INVALID') {
                 if (this.hasAlreadyAuthenticatedSuccessfully) {
                     throw new DDoSProtection (this.id + ' ' + this.json (response));
@@ -738,5 +740,8 @@ module.exports = class bittrex extends Exchange {
             }
         }
         this.throwExceptionOnError (response);
+        // MJM orig code returns undefined here, not sure the intent
+        // MJM this causes problem with withdraw() request hitting 24-hour limit
+        // MJM I edited throwExceptionOnError() to detect 24-hour limit and leave this unchanged here
     }
 };
