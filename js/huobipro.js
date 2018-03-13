@@ -71,6 +71,7 @@ module.exports = class huobipro extends Exchange {
                         'order/orders', // 查询当前委托、历史委托
                         'order/matchresults', // 查询当前成交、历史成交
                         'dw/withdraw-virtual/addresses', // 查询虚拟币提现地址
+                        'query/deposit-withdraw', // MJM
                     ],
                     'post': [
                         'order/orders/place', // 创建并执行一个新订单 (一步下单， 推荐使用)
