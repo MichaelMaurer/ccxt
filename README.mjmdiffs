@@ -78,3 +78,7 @@ Added parseMyTrade() for fetchMyTrades().
 Huobi api config
 ----------------
 Added entry for query/deposit-withdraw.
+
+Huobi URLs
+----------
+Change huobipro.com => huobi.pro
