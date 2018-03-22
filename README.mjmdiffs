@@ -42,6 +42,10 @@ Default implementation filters out ticker data for symbols not requested, and ha
 This can cause arby to repeatedly poll fetchTickers() on startup.
 Easiest solution: do not filter.
 
+Bibox fetchMyTrades()
+---------------------
+Added parseMyTrade() for fetchMyTrades().
+
 Huobi api config
 ----------------
 Added entry for query/deposit-withdraw.

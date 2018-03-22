@@ -182,7 +182,40 @@ module.exports = class bibox extends Exchange {
         return result;
     }
 
+    parseMyTrade (trade) { // MJM
+        // Example record:
+        //    { id: 441589483,
+        //      createdAt: 1521169455000,
+        //      account_type: 0,
+        //      coin_symbol: 'MANA',
+        //      currency_symbol: 'BTC',
+        //      order_side: 2,
+        //      order_type: 2,
+        //      price: '0.00001083',
+        //      amount: '0.0725',
+        //      money: '0.00000078',
+        //      fee: '0.00000000',
+        //      pay_bix: 1,
+        //      fee_symbol: 'BIX'
+        //    }
+        let id = trade.id
+        let info = trade
+        let timestamp = trade.createdAt
+        let datetime = this.iso8601(timestamp)
+        let pair = trade.coin_symbol + '/' + trade.currency_symbol
+        let symbol = this.markets[pair].symbol
+        let type = 'limit'
+        let side = trade.side === 1 ? 'buy' : 'sell'
+        let price = trade.price
+        let amount = trade.amount
+        let fee = trade.fee
+        return {id, info, timestamp, datetime, symbol, type, side, price, amount, fee}
+    }    
+
     parseTrade (trade, market = undefined) {
+        if (trade.createdAt) {
+          return this.parseMyTrade(trade) // MJM
+        }
         let timestamp = trade['time'];
         let side = this.safeInteger (trade, 'side');
         side = this.safeInteger (trade, 'order_side', side);
