@@ -12,6 +12,7 @@ from ccxt.base.errors import NotSupported
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import InvalidOrder
 from ccxt.base.errors import OrderNotFound
+from ccxt.base.errors import DDoSProtection
 from ccxt.base.errors import ExchangeNotAvailable
 
 
@@ -32,6 +33,7 @@ class livecoin (Exchange):
                 'fetchOrders': True,
                 'fetchOpenOrders': True,
                 'fetchClosedOrders': True,
+                'withdraw': True,
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/27980768-f22fc424-638a-11e7-89c9-6010a54ff9be.jpg',
@@ -129,6 +131,7 @@ class livecoin (Exchange):
                 'symbol': symbol,
                 'base': base,
                 'quote': quote,
+                'active': True,
                 'precision': precision,
                 'limits': limits,
                 'info': market,
@@ -237,7 +240,7 @@ class livecoin (Exchange):
     def fetch_fees(self, params={}):
         tradingFees = self.fetch_trading_fees(params)
         return self.extend(tradingFees, {
-            'withdraw': 0.0,
+            'withdraw': {},
         })
 
     def fetch_trading_fees(self, params={}):
@@ -270,6 +273,7 @@ class livecoin (Exchange):
         vwap = float(ticker['vwap'])
         baseVolume = float(ticker['volume'])
         quoteVolume = baseVolume * vwap
+        last = float(ticker['last'])
         return {
             'symbol': symbol,
             'timestamp': timestamp,
@@ -277,12 +281,14 @@ class livecoin (Exchange):
             'high': float(ticker['high']),
             'low': float(ticker['low']),
             'bid': float(ticker['best_bid']),
+            'bidVolume': None,
             'ask': float(ticker['best_ask']),
+            'askVolume': None,
             'vwap': float(ticker['vwap']),
             'open': None,
-            'close': None,
-            'first': None,
-            'last': float(ticker['last']),
+            'close': last,
+            'last': last,
+            'previousClose': None,
             'change': None,
             'percentage': None,
             'average': None,
@@ -464,6 +470,25 @@ class livecoin (Exchange):
                     raise OrderNotFound(message)
         raise ExchangeError(self.id + ' cancelOrder() failed: ' + self.json(response))
 
+    def withdraw(self, currency, amount, address, tag=None, params={}):
+        # Sometimes the response with be {key: null} for all keys.
+        # An example is if you attempt to withdraw more than is allowed when withdrawal fees are considered.
+        self.load_markets()
+        self.check_address(address)
+        wallet = address
+        if tag is not None:
+            wallet += '::' + tag
+        withdrawal = {
+            'amount': amount,
+            'currency': self.common_currency_code(currency),
+            'wallet': wallet,
+        }
+        response = self.privatePostPaymentOutCoin(self.extend(withdrawal, params))
+        return {
+            'info': response,
+            'id': self.safe_integer(response, 'id'),
+        }
+
     def fetch_deposit_address(self, currency, params={}):
         request = {
             'currency': currency,
@@ -475,6 +500,7 @@ class livecoin (Exchange):
             parts = address.split(':')
             address = parts[0]
             tag = parts[2]
+        self.check_address(address)
         return {
             'currency': currency,
             'address': address,
@@ -532,6 +558,8 @@ class livecoin (Exchange):
                         raise InvalidOrder(self.id + ': Unable to block funds ' + self.json(response))
                     elif error == 503:
                         raise ExchangeNotAvailable(self.id + ': Exchange is not available ' + self.json(response))
+                    elif error == 429:
+                        raise DDoSProtection(self.id + ': Too many requests' + self.json(response))
                     else:
                         raise ExchangeError(self.id + ' ' + self.json(response))
             raise ExchangeError(self.id + ' ' + body)

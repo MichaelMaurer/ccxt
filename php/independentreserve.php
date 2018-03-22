@@ -134,6 +134,7 @@ class independentreserve extends Exchange {
         $symbol = null;
         if ($market)
             $symbol = $market['symbol'];
+        $last = $ticker['LastPrice'];
         return array (
             'symbol' => $symbol,
             'timestamp' => $timestamp,
@@ -141,12 +142,14 @@ class independentreserve extends Exchange {
             'high' => $ticker['DayHighestPrice'],
             'low' => $ticker['DayLowestPrice'],
             'bid' => $ticker['CurrentHighestBidPrice'],
+            'bidVolume' => null,
             'ask' => $ticker['CurrentLowestOfferPrice'],
+            'askVolume' => null,
             'vwap' => null,
             'open' => null,
-            'close' => null,
-            'first' => null,
-            'last' => $ticker['LastPrice'],
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
             'change' => null,
             'percentage' => null,
             'average' => $ticker['DayAvgPrice'],
@@ -199,7 +202,7 @@ class independentreserve extends Exchange {
         $capitalizedOrderType = $this->capitalize ($type);
         $method = 'privatePostPlace' . $capitalizedOrderType . 'Order';
         $orderType = $capitalizedOrderType;
-        $orderType .= ($side === 'sell') ?  'Offer' : 'Bid';
+        $orderType .= ($side === 'sell') ? 'Offer' : 'Bid';
         $order = $this->ordered (array (
             'primaryCurrencyCode' => $market['baseId'],
             'secondaryCurrencyCode' => $market['quoteId'],

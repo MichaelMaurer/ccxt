@@ -16,6 +16,7 @@ class lakebtc extends Exchange {
             'has' => array (
                 'CORS' => true,
                 'createMarketOrder' => false,
+                'fetchTickers' => true,
             ),
             'urls' => array (
                 'logo' => 'https://user-images.githubusercontent.com/1294454/28074120-72b7c38a-6660-11e7-92d9-d9027502281d.jpg',
@@ -113,14 +114,12 @@ class lakebtc extends Exchange {
         return $this->parse_order_book($orderbook);
     }
 
-    public function fetch_ticker ($symbol, $params = array ()) {
-        $this->load_markets();
-        $market = $this->market ($symbol);
-        $tickers = $this->publicGetTicker (array_merge (array (
-            'symbol' => $market['id'],
-        ), $params));
-        $ticker = $tickers[$market['id']];
+    public function parse_ticker ($ticker, $market = null) {
         $timestamp = $this->milliseconds ();
+        $symbol = null;
+        if ($market !== null)
+            $symbol = $market['symbol'];
+        $last = $this->safe_float($ticker, 'last');
         return array (
             'symbol' => $symbol,
             'timestamp' => $timestamp,
@@ -128,12 +127,14 @@ class lakebtc extends Exchange {
             'high' => $this->safe_float($ticker, 'high'),
             'low' => $this->safe_float($ticker, 'low'),
             'bid' => $this->safe_float($ticker, 'bid'),
+            'bidVolume' => null,
             'ask' => $this->safe_float($ticker, 'ask'),
+            'askVolume' => null,
             'vwap' => null,
             'open' => null,
-            'close' => null,
-            'first' => null,
-            'last' => $this->safe_float($ticker, 'last'),
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
             'change' => null,
             'percentage' => null,
             'average' => null,
@@ -141,6 +142,31 @@ class lakebtc extends Exchange {
             'quoteVolume' => null,
             'info' => $ticker,
         );
+    }
+
+    public function fetch_tickers ($symbols = null, $params = array ()) {
+        $this->load_markets();
+        $tickers = $this->publicGetTicker ($params);
+        $ids = is_array ($tickers) ? array_keys ($tickers) : array ();
+        $result = array ();
+        for ($i = 0; $i < count ($ids); $i++) {
+            $symbol = $ids[$i];
+            $ticker = $tickers[$symbol];
+            $market = null;
+            if (is_array ($this->markets_by_id) && array_key_exists ($symbol, $this->markets_by_id)) {
+                $market = $this->markets_by_id[$symbol];
+                $symbol = $market['symbol'];
+            }
+            $result[$symbol] = $this->parse_ticker($ticker, $market);
+        }
+        return $result;
+    }
+
+    public function fetch_ticker ($symbol, $params = array ()) {
+        $this->load_markets();
+        $market = $this->market ($symbol);
+        $tickers = $this->publicGetTicker ($params);
+        return $this->parse_ticker($tickers[$market['id']], $market);
     }
 
     public function parse_trade ($trade, $market) {
@@ -168,14 +194,14 @@ class lakebtc extends Exchange {
         return $this->parse_trades($response, $market, $since, $limit);
     }
 
-    public function create_order ($market, $type, $side, $amount, $price = null, $params = array ()) {
+    public function create_order ($symbol, $type, $side, $amount, $price = null, $params = array ()) {
         $this->load_markets();
         if ($type === 'market')
             throw new ExchangeError ($this->id . ' allows limit orders only');
         $method = 'privatePost' . $this->capitalize ($side) . 'Order';
-        $marketId = $this->market_id($market);
+        $market = $this->market ($symbol);
         $order = array (
-            'params' => array ( $price, $amount, $marketId ),
+            'params' => [ $price, $amount, $market['id'] ],
         );
         $response = $this->$method (array_merge ($order, $params));
         return array (

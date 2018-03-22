@@ -16,7 +16,13 @@ class coinexchange extends Exchange {
             // new metainfo interface
             'has' => array (
                 'privateAPI' => false,
+                'createOrder' => false,
+                'createMarketOrder' => false,
+                'createLimitOrder' => false,
+                'cancelOrder' => false,
+                'editOrder' => false,
                 'fetchTrades' => false,
+                'fetchOHLCV' => false,
                 'fetchCurrencies' => true,
                 'fetchTickers' => true,
             ),
@@ -530,19 +536,13 @@ class coinexchange extends Exchange {
                 'amount' => 8,
                 'price' => 8,
             ),
+            'commonCurrencies' => array (
+                'BON' => 'BonPeKaO',
+                'ETN' => 'Ethernex',
+                'HNC' => 'Huncoin',
+                'MARS' => 'MarsBux',
+            ),
         ));
-    }
-
-    public function common_currency_code ($currency) {
-        $substitutions = array (
-            'BON' => 'BonPeKaO',
-            'ETN' => 'Ethernex',
-            'HNC' => 'Huncoin',
-            'MARS' => 'MarsBux',
-        );
-        if (is_array ($substitutions) && array_key_exists ($currency, $substitutions))
-            return $substitutions[$currency];
-        return $currency;
     }
 
     public function fetch_currencies ($params = array ()) {
@@ -619,13 +619,14 @@ class coinexchange extends Exchange {
         if (!$market) {
             $marketId = $ticker['MarketID'];
             if (is_array ($this->markets_by_id) && array_key_exists ($marketId, $this->markets_by_id))
-                $market = $this->marketsById[$marketId];
+                $market = $this->markets_by_id[$marketId];
             else
                 $symbol = $marketId;
         }
         if ($market)
             $symbol = $market['symbol'];
         $timestamp = $this->milliseconds ();
+        $last = $this->safe_float($ticker, 'LastPrice');
         return array (
             'symbol' => $symbol,
             'timestamp' => $timestamp,
@@ -633,12 +634,14 @@ class coinexchange extends Exchange {
             'high' => $this->safe_float($ticker, 'HighPrice'),
             'low' => $this->safe_float($ticker, 'LowPrice'),
             'bid' => $this->safe_float($ticker, 'BidPrice'),
+            'bidVolume' => null,
             'ask' => $this->safe_float($ticker, 'AskPrice'),
+            'askVolume' => null,
             'vwap' => null,
             'open' => null,
-            'close' => null,
-            'first' => null,
-            'last' => $this->safe_float($ticker, 'LastPrice'),
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
             'change' => $this->safe_float($ticker, 'Change'),
             'percentage' => null,
             'average' => null,

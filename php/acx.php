@@ -85,12 +85,12 @@ class acx extends Exchange {
                 'funding' => array (
                     'tierBased' => false,
                     'percentage' => true,
-                    'withdraw' => 0.0, // There is only 1% fee on withdrawals to your bank account.
+                    'withdraw' => array (), // There is only 1% fee on withdrawals to your bank account.
                 ),
             ),
             'exceptions' => array (
-                2002 => '\\ccxt\\InsufficientFunds',
-                2003 => '\\ccxt\\OrderNotFound',
+                '2002' => '\\ccxt\\InsufficientFunds',
+                '2003' => '\\ccxt\\OrderNotFound',
             ),
         ));
     }
@@ -158,6 +158,7 @@ class acx extends Exchange {
         $symbol = null;
         if ($market)
             $symbol = $market['symbol'];
+        $last = $this->safe_float($ticker, 'last', null);
         return array (
             'symbol' => $symbol,
             'timestamp' => $timestamp,
@@ -165,12 +166,14 @@ class acx extends Exchange {
             'high' => $this->safe_float($ticker, 'high', null),
             'low' => $this->safe_float($ticker, 'low', null),
             'bid' => $this->safe_float($ticker, 'buy', null),
+            'bidVolume' => null,
             'ask' => $this->safe_float($ticker, 'sell', null),
+            'askVolume' => null,
             'vwap' => null,
             'open' => null,
-            'close' => null,
-            'first' => null,
-            'last' => $this->safe_float($ticker, 'last', null),
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
             'change' => null,
             'percentage' => null,
             'average' => null,
@@ -274,7 +277,7 @@ class acx extends Exchange {
             $symbol = $market['symbol'];
         } else {
             $marketId = $order['market'];
-            $symbol = $this->marketsById[$marketId]['symbol'];
+            $symbol = $this->markets_by_id[$marketId]['symbol'];
         }
         $timestamp = $this->parse8601 ($order['created_at']);
         $state = $order['state'];
@@ -316,7 +319,7 @@ class acx extends Exchange {
             $order['price'] = (string) $price;
         }
         $response = $this->privatePostOrders (array_merge ($order, $params));
-        $market = $this->marketsById[$response['market']];
+        $market = $this->markets_by_id[$response['market']];
         return $this->parse_order($response, $market);
     }
 
@@ -332,6 +335,7 @@ class acx extends Exchange {
     }
 
     public function withdraw ($currency, $amount, $address, $tag = null, $params = array ()) {
+        $this->check_address($address);
         $this->load_markets();
         $result = $this->privatePostWithdraw (array_merge (array (
             'currency' => strtolower ($currency),

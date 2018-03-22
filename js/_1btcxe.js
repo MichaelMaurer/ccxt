@@ -118,25 +118,28 @@ module.exports = class _1btcxe extends Exchange {
             'currency': this.marketId (symbol),
         }, params));
         let ticker = response['stats'];
-        let timestamp = this.milliseconds ();
+        let last = parseFloat (ticker['last_price']);
         return {
             'symbol': symbol,
-            'timestamp': timestamp,
-            'datetime': this.iso8601 (timestamp),
+            'timestamp': undefined,
+            'datetime': undefined,
             'high': parseFloat (ticker['max']),
             'low': parseFloat (ticker['min']),
             'bid': parseFloat (ticker['bid']),
+            'bidVolume': undefined,
             'ask': parseFloat (ticker['ask']),
+            'askVolume': undefined,
             'vwap': undefined,
             'open': parseFloat (ticker['open']),
-            'close': undefined,
-            'first': undefined,
-            'last': parseFloat (ticker['last_price']),
+            'close': last,
+            'last': last,
+            'previousClose': undefined,
             'change': parseFloat (ticker['daily_change']),
             'percentage': undefined,
             'average': undefined,
             'baseVolume': undefined,
             'quoteVolume': parseFloat (ticker['total_btc_traded']),
+            'info': ticker,
         };
     }
 
@@ -207,6 +210,7 @@ module.exports = class _1btcxe extends Exchange {
     }
 
     async withdraw (currency, amount, address, tag = undefined, params = {}) {
+        this.checkAddress (address);
         await this.loadMarkets ();
         let response = await this.privatePostWithdrawalsNew (this.extend ({
             'currency': currency,

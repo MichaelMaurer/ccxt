@@ -20,7 +20,6 @@ module.exports = class gemini extends Exchange {
                 'CORS': false,
                 'fetchBidsAsks': false,
                 'fetchTickers': false,
-                'fetchOHLCV': false,
                 'fetchMyTrades': true,
                 'fetchOrder': false,
                 'fetchOrders': false,
@@ -116,6 +115,7 @@ module.exports = class gemini extends Exchange {
         let timestamp = ticker['volume']['timestamp'];
         let baseVolume = market['base'];
         let quoteVolume = market['quote'];
+        let last = parseFloat (ticker['last']);
         return {
             'symbol': symbol,
             'timestamp': timestamp,
@@ -123,12 +123,14 @@ module.exports = class gemini extends Exchange {
             'high': undefined,
             'low': undefined,
             'bid': parseFloat (ticker['bid']),
+            'bidVolume': undefined,
             'ask': parseFloat (ticker['ask']),
+            'askVolume': undefined,
             'vwap': undefined,
             'open': undefined,
-            'close': undefined,
-            'first': undefined,
-            'last': parseFloat (ticker['last']),
+            'close': last,
+            'last': last,
+            'previousClose': undefined,
             'change': undefined,
             'percentage': undefined,
             'average': undefined,
@@ -141,8 +143,8 @@ module.exports = class gemini extends Exchange {
     parseTrade (trade, market) {
         let timestamp = trade['timestampms'];
         let order = undefined;
-        if ('orderId' in trade)
-            order = trade['orderId'].toString ();
+        if ('order_id' in trade)
+            order = trade['order_id'].toString ();
         let fee = this.safeFloat (trade, 'fee_amount');
         if (typeof fee !== 'undefined') {
             let currency = this.safeString (trade, 'fee_currency');
@@ -223,7 +225,7 @@ module.exports = class gemini extends Exchange {
 
     async cancelOrder (id, symbol = undefined, params = {}) {
         await this.loadMarkets ();
-        return await this.privatePostCancelOrder ({ 'order_id': id });
+        return await this.privatePostOrderCancel ({ 'order_id': id });
     }
 
     async fetchMyTrades (symbol = undefined, since = undefined, limit = undefined, params = {}) {
@@ -241,6 +243,7 @@ module.exports = class gemini extends Exchange {
     }
 
     async withdraw (code, amount, address, tag = undefined, params = {}) {
+        this.checkAddress (address);
         await this.loadMarkets ();
         let currency = this.currency (code);
         let response = await this.privatePostWithdrawCurrency (this.extend ({

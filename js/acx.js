@@ -86,12 +86,12 @@ module.exports = class acx extends Exchange {
                 'funding': {
                     'tierBased': false,
                     'percentage': true,
-                    'withdraw': 0.0, // There is only 1% fee on withdrawals to your bank account.
+                    'withdraw': {}, // There is only 1% fee on withdrawals to your bank account.
                 },
             },
             'exceptions': {
-                2002: InsufficientFunds,
-                2003: OrderNotFound,
+                '2002': InsufficientFunds,
+                '2003': OrderNotFound,
             },
         });
     }
@@ -159,6 +159,7 @@ module.exports = class acx extends Exchange {
         let symbol = undefined;
         if (market)
             symbol = market['symbol'];
+        let last = this.safeFloat (ticker, 'last', undefined);
         return {
             'symbol': symbol,
             'timestamp': timestamp,
@@ -166,12 +167,14 @@ module.exports = class acx extends Exchange {
             'high': this.safeFloat (ticker, 'high', undefined),
             'low': this.safeFloat (ticker, 'low', undefined),
             'bid': this.safeFloat (ticker, 'buy', undefined),
+            'bidVolume': undefined,
             'ask': this.safeFloat (ticker, 'sell', undefined),
+            'askVolume': undefined,
             'vwap': undefined,
             'open': undefined,
-            'close': undefined,
-            'first': undefined,
-            'last': this.safeFloat (ticker, 'last', undefined),
+            'close': last,
+            'last': last,
+            'previousClose': undefined,
             'change': undefined,
             'percentage': undefined,
             'average': undefined,
@@ -275,7 +278,7 @@ module.exports = class acx extends Exchange {
             symbol = market['symbol'];
         } else {
             let marketId = order['market'];
-            symbol = this.marketsById[marketId]['symbol'];
+            symbol = this.markets_by_id[marketId]['symbol'];
         }
         let timestamp = this.parse8601 (order['created_at']);
         let state = order['state'];
@@ -317,7 +320,7 @@ module.exports = class acx extends Exchange {
             order['price'] = price.toString ();
         }
         let response = await this.privatePostOrders (this.extend (order, params));
-        let market = this.marketsById[response['market']];
+        let market = this.markets_by_id[response['market']];
         return this.parseOrder (response, market);
     }
 
@@ -333,6 +336,7 @@ module.exports = class acx extends Exchange {
     }
 
     async withdraw (currency, amount, address, tag = undefined, params = {}) {
+        this.checkAddress (address);
         await this.loadMarkets ();
         let result = await this.privatePostWithdraw (this.extend ({
             'currency': currency.toLowerCase (),

@@ -1,5 +1,29 @@
-Migrating to ccxt 1.10.1094
-===========================
+Migrating to ccxt 1.11.150
+==========================
+
+Git setup
+---------
+$ git remote add upstream git@github.com:ccxt/ccxt 
+$ git fetch upstream
+
+Merge Process
+-------------
+We pull from upstream into branch <master>.
+We make local edits in branch <mjm>.
+Occasionally we pull from upstream to <master> and merge from <master> to <mjm>.
+$ git checkout mjm
+$ git commit -m "..."
+$ git checkout master
+* Show differences from <upstream>: git diff master upstream/master
+$ git pull https://github.com/ccxt/ccxt master
+* If conficts (shouldn't be any as we aren't editing on master), resolve and commit.
+$ git push origin master
+$ git checkout mjm
+$ git merge master
+* Review conflicts, reimplement patches as needed.
+* Show differences from <master>: git diff master
+$ git commit -m "..."
+
 
 Verbose logging
 ---------------
@@ -7,6 +31,7 @@ base/Exchange.js fetch()
 base/Exchange.js handleRestResponse()
   origin: calls console.log()
   patch: base/Exchange.js: add this.verboseLogger, call that in same place
+         also disables "details" explanation in logging
 js/bitfinex.js sign()
   patch: log query params before they are encoded into header
 
@@ -30,6 +55,10 @@ Liqui "no orders" response
 origin: throws error if error='no orders'
 patch: edit liqui.js handleErrors() to tolerate
 
+Binance URLS
+------------
+Change from www.binance.com to us.binance.com everywhere.
+
 Binance fetchTickers()
 ----------------------
 Default implementation filters out ticker data for symbols not requested.
@@ -38,7 +67,7 @@ Easiest solution: do not filter.
 
 Bibox fetchTickers()
 --------------------
-Default implementation filters out ticker data for symbols not requested, and has a bug.
+Default implementation filters out ticker data for symbols not requested.
 This can cause arby to repeatedly poll fetchTickers() on startup.
 Easiest solution: do not filter.
 

@@ -15,7 +15,6 @@ class okex extends okcoinusd {
             'has' => array (
                 'CORS' => false,
                 'futures' => true,
-                'hasFetchTickers' => true,
                 'fetchTickers' => true,
             ),
             'urls' => array (
@@ -29,16 +28,14 @@ class okex extends okcoinusd {
                 'doc' => 'https://www.okex.com/rest_getStarted.html',
                 'fees' => 'https://www.okex.com/fees.html',
             ),
+            'commonCurrencies' => array (
+                'FAIR' => 'FairGame',
+                'HMC' => 'Hi Mutual Society',
+                'MAG' => 'Maggie',
+                'NANO' => 'XRB',
+                'YOYO' => 'YOYOW',
+            ),
         ));
-    }
-
-    public function common_currency_code ($currency) {
-        $currencies = array (
-            'FAIR' => 'FairGame',
-        );
-        if (is_array ($currencies) && array_key_exists ($currency, $currencies))
-            return $currencies[$currency];
-        return $currency;
     }
 
     public function calculate_fee ($symbol, $type, $side, $amount, $price, $takerOrMaker = 'taker', $params = array ()) {

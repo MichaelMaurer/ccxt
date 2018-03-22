@@ -148,6 +148,11 @@ class bithumb extends Exchange {
         $symbol = null;
         if ($market)
             $symbol = $market['symbol'];
+        $open = $this->safe_float($ticker, 'opening_price');
+        $close = $this->safe_float($ticker, 'closing_price');
+        $change = $close - $open;
+        $vwap = $this->safe_float($ticker, 'average_price');
+        $baseVolume = $this->safe_float($ticker, 'volume_1day');
         return array (
             'symbol' => $symbol,
             'timestamp' => $timestamp,
@@ -155,17 +160,19 @@ class bithumb extends Exchange {
             'high' => $this->safe_float($ticker, 'max_price'),
             'low' => $this->safe_float($ticker, 'min_price'),
             'bid' => $this->safe_float($ticker, 'buy_price'),
+            'bidVolume' => null,
             'ask' => $this->safe_float($ticker, 'sell_price'),
-            'vwap' => null,
-            'open' => $this->safe_float($ticker, 'opening_price'),
-            'close' => $this->safe_float($ticker, 'closing_price'),
-            'first' => null,
-            'last' => $this->safe_float($ticker, 'last_trade'),
-            'change' => null,
-            'percentage' => null,
-            'average' => $this->safe_float($ticker, 'average_price'),
-            'baseVolume' => $this->safe_float($ticker, 'volume_1day'),
-            'quoteVolume' => null,
+            'askVolume' => null,
+            'vwap' => $vwap,
+            'open' => $open,
+            'close' => $close,
+            'last' => $close,
+            'previousClose' => null,
+            'change' => $change,
+            'percentage' => $change / $open * 100,
+            'average' => $this->sum ($open, $close) / 2,
+            'baseVolume' => $baseVolume,
+            'quoteVolume' => $baseVolume * $vwap,
             'info' => $ticker,
         );
     }
@@ -282,6 +289,7 @@ class bithumb extends Exchange {
     }
 
     public function withdraw ($currency, $amount, $address, $tag = null, $params = array ()) {
+        $this->check_address($address);
         $request = array (
             'units' => $amount,
             'address' => $address,

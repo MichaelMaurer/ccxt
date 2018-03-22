@@ -15,6 +15,8 @@ class southxchange extends Exchange {
             'rateLimit' => 1000,
             'has' => array (
                 'CORS' => true,
+                'createDepositAddres' => true,
+                'fetchOpenOrders' => true,
                 'fetchTickers' => true,
                 'withdraw' => true,
             ),
@@ -113,6 +115,7 @@ class southxchange extends Exchange {
         $symbol = null;
         if ($market)
             $symbol = $market['symbol'];
+        $last = $this->safe_float($ticker, 'Last');
         return array (
             'symbol' => $symbol,
             'timestamp' => $timestamp,
@@ -120,12 +123,14 @@ class southxchange extends Exchange {
             'high' => null,
             'low' => null,
             'bid' => $this->safe_float($ticker, 'Bid'),
+            'bidVolume' => null,
             'ask' => $this->safe_float($ticker, 'Ask'),
+            'askVolume' => null,
             'vwap' => null,
             'open' => null,
-            'close' => null,
-            'first' => null,
-            'last' => $this->safe_float($ticker, 'Last'),
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
             'change' => $this->safe_float($ticker, 'Variation24Hr'),
             'percentage' => null,
             'average' => null,
@@ -189,6 +194,49 @@ class southxchange extends Exchange {
         return $this->parse_trades($response, $market, $since, $limit);
     }
 
+    public function parse_order ($order, $market = null) {
+        $status = 'open';
+        $symbol = $order['ListingCurrency'] . '/' . $order['ReferenceCurrency'];
+        $timestamp = null;
+        $price = floatval ($order['LimitPrice']);
+        $amount = $this->safe_float($order, 'OriginalAmount');
+        $remaining = $this->safe_float($order, 'Amount');
+        $filled = null;
+        $cost = null;
+        if ($amount !== null) {
+            $cost = $price * $amount;
+            if ($remaining !== null)
+                $filled = $amount - $remaining;
+        }
+        $orderType = strtolower ($order['Type']);
+        $result = array (
+            'info' => $order,
+            'id' => (string) $order['Code'],
+            'timestamp' => $timestamp,
+            'datetime' => $this->iso8601 ($timestamp),
+            'symbol' => $symbol,
+            'type' => $orderType,
+            'side' => null,
+            'price' => $price,
+            'amount' => $amount,
+            'cost' => $cost,
+            'filled' => $filled,
+            'remaining' => $remaining,
+            'status' => $status,
+            'fee' => null,
+        );
+        return $result;
+    }
+
+    public function fetch_open_orders ($symbol = null, $since = null, $limit = null, $params = array ()) {
+        $this->load_markets();
+        $market = null;
+        if ($symbol !== null)
+            $market = $this->market ($symbol);
+        $response = $this->privatePostListOrders ();
+        return $this->parse_orders($response, $market, $since, $limit);
+    }
+
     public function create_order ($symbol, $type, $side, $amount, $price = null, $params = array ()) {
         $this->load_markets();
         $market = $this->market ($symbol);
@@ -214,12 +262,38 @@ class southxchange extends Exchange {
         ), $params));
     }
 
+    public function create_deposit_address ($code, $params = array ()) {
+        $this->load_markets();
+        $currency = $this->currency ($code);
+        $response = $this->privatePostGeneratenewaddress (array_merge (array (
+            'currency' => $currency['id'],
+        ), $params));
+        $parts = explode ('|', $response);
+        $numParts = is_array ($parts) ? count ($parts) : 0;
+        $address = $parts[0];
+        $this->check_address($address);
+        $tag = null;
+        if ($numParts > 1)
+            $tag = $parts[1];
+        return array (
+            'currency' => $code,
+            'address' => $address,
+            'tag' => $tag,
+            'status' => 'ok',
+            'info' => $response,
+        );
+    }
+
     public function withdraw ($currency, $amount, $address, $tag = null, $params = array ()) {
-        $response = $this->privatePostWithdraw (array_merge (array (
+        $this->check_address($address);
+        $request = array (
             'currency' => $currency,
             'address' => $address,
             'amount' => $amount,
-        ), $params));
+        );
+        if ($tag !== null)
+            $request['address'] = $address . '|' . $tag;
+        $response = $this->privatePostWithdraw (array_merge ($request, $params));
         return array (
             'info' => $response,
             'id' => null,
@@ -243,10 +317,5 @@ class southxchange extends Exchange {
             );
         }
         return array ( 'url' => $url, 'method' => $method, 'body' => $body, 'headers' => $headers );
-    }
-
-    public function request ($path, $api = 'public', $method = 'GET', $params = array (), $headers = null, $body = null) {
-        $response = $this->fetch2 ($path, $api, $method, $params, $headers, $body);
-        return $response;
     }
 }

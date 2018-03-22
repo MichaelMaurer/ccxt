@@ -88,6 +88,7 @@ class mercado (Exchange):
         }, params))
         ticker = response['ticker']
         timestamp = int(ticker['date']) * 1000
+        last = float(ticker['last'])
         return {
             'symbol': symbol,
             'timestamp': timestamp,
@@ -95,12 +96,14 @@ class mercado (Exchange):
             'high': float(ticker['high']),
             'low': float(ticker['low']),
             'bid': float(ticker['buy']),
+            'bidVolume': None,
             'ask': float(ticker['sell']),
+            'askVolume': None,
             'vwap': None,
             'open': None,
-            'close': None,
-            'first': None,
-            'last': float(ticker['last']),
+            'close': last,
+            'last': last,
+            'previousClose': None,
             'change': None,
             'percentage': None,
             'average': None,
@@ -126,9 +129,17 @@ class mercado (Exchange):
 
     def fetch_trades(self, symbol, since=None, limit=None, params={}):
         market = self.market(symbol)
-        response = self.publicGetCoinTrades(self.extend({
+        method = 'publicGetCoinTrades'
+        request = {
             'coin': market['base'],
-        }, params))
+        }
+        if since is not None:
+            method += 'From'
+            request['from'] = int(since / 1000)
+        to = self.safe_integer(params, 'to')
+        if to is not None:
+            method += 'To'
+        response = getattr(self, method)(self.extend(request, params))
         return self.parse_trades(response, market, since, limit)
 
     def fetch_balance(self, params={}):
@@ -232,6 +243,7 @@ class mercado (Exchange):
         return self.parse_order(response['response_data']['order'])
 
     def withdraw(self, currency, amount, address, tag=None, params={}):
+        self.check_address(address)
         self.load_markets()
         request = {
             'coin': currency,
@@ -254,8 +266,11 @@ class mercado (Exchange):
 
     def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):
         url = self.urls['api'][api] + '/'
+        query = self.omit(params, self.extract_params(path))
         if api == 'public':
             url += self.implode_params(path, params)
+            if query:
+                url += '?' + self.urlencode(query)
         else:
             self.check_required_credentials()
             url += self.version + '/'

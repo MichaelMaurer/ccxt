@@ -72,42 +72,20 @@ class cryptopia extends Exchange {
                     ),
                 ),
             ),
+            'commonCurrencies' => array (
+                'ACC' => 'AdCoin',
+                'BAT' => 'BatCoin',
+                'BLZ' => 'BlazeCoin',
+                'CC' => 'CCX',
+                'CMT' => 'Comet',
+                'FCN' => 'Facilecoin',
+                'NET' => 'NetCoin',
+                'BTG' => 'Bitgem',
+                'FUEL' => 'FC2', // FuelCoin != FUEL
+                'QBT' => 'Cubits',
+                'WRC' => 'WarCoin',
+            ),
         ));
-    }
-
-    public function common_currency_code ($currency) {
-        $currencies = array (
-            'ACC' => 'AdCoin',
-            'BAT' => 'BatCoin',
-            'CC' => 'CCX',
-            'CMT' => 'Comet',
-            'FCN' => 'Facilecoin',
-            'NET' => 'NetCoin',
-            'BTG' => 'Bitgem',
-            'FUEL' => 'FC2', // FuelCoin != FUEL
-            'QBT' => 'Cubits',
-            'WRC' => 'WarCoin',
-        );
-        if (is_array ($currencies) && array_key_exists ($currency, $currencies))
-            return $currencies[$currency];
-        return $currency;
-    }
-
-    public function currency_id ($currency) {
-        $currencies = array (
-            'AdCoin' => 'ACC',
-            'BatCoin' => 'BAT',
-            'CCX' => 'CC',
-            'Comet' => 'CMT',
-            'Cubits' => 'QBT',
-            'Facilecoin' => 'FCN',
-            'NetCoin' => 'NET',
-            'Bitgem' => 'BTG',
-            'FC2' => 'FUEL',
-        );
-        if (is_array ($currencies) && array_key_exists ($currency, $currencies))
-            return $currencies[$currency];
-        return $currency;
     }
 
     public function fetch_markets () {
@@ -171,19 +149,25 @@ class cryptopia extends Exchange {
         return $this->parse_order_book($orderbook, null, 'Buy', 'Sell', 'Price', 'Volume');
     }
 
+    public function join_market_ids ($ids, $glue = '-') {
+        $result = (string) $ids[0];
+        for ($i = 1; $i < count ($ids); $i++) {
+            $result .= $glue . (string) $ids[$i];
+        }
+        return $result;
+    }
+
     public function fetch_order_books ($symbols = null, $params = array ()) {
         $this->load_markets();
         $ids = null;
         if (!$symbols) {
-            $ids = implode ('-', $this->ids);
-            // max URL length is 2083 $symbols, including http schema, hostname, tld, etc...
-            if (strlen ($ids) > 2048) {
-                $numIds = is_array ($this->ids) ? count ($this->ids) : 0;
+            $numIds = is_array ($this->ids) ? count ($this->ids) : 0;
+            // max URL length is 2083 characters, including http schema, hostname, tld, etc...
+            if ($numIds > 2048)
                 throw new ExchangeError ($this->id . ' has ' . (string) $numIds . ' $symbols exceeding max URL length, you are required to specify a list of $symbols in the first argument to fetchOrderBooks');
-            }
+            $ids = $this->join_market_ids ($this->ids);
         } else {
-            $ids = $this->market_ids($symbols);
-            $ids = implode ('-', $ids);
+            $ids = $this->join_market_ids ($this->market_ids($symbols));
         }
         $response = $this->publicGetGetMarketOrderGroupsIds (array_merge (array (
             'ids' => $ids,
@@ -192,10 +176,10 @@ class cryptopia extends Exchange {
         $result = array ();
         for ($i = 0; $i < count ($orderbooks); $i++) {
             $orderbook = $orderbooks[$i];
-            $id = $this->safe_string($orderbook, 'TradePairId');
+            $id = $this->safe_integer($orderbook, 'TradePairId');
             $symbol = $id;
-            if (is_array ($this->marketsById) && array_key_exists ($id, $this->marketsById)) {
-                $market = $this->marketsById[$id];
+            if (is_array ($this->markets_by_id) && array_key_exists ($id, $this->markets_by_id)) {
+                $market = $this->markets_by_id[$id];
                 $symbol = $market['symbol'];
             }
             $result[$symbol] = $this->parse_order_book($orderbook, null, 'Buy', 'Sell', 'Price', 'Volume');
@@ -208,6 +192,16 @@ class cryptopia extends Exchange {
         $symbol = null;
         if ($market)
             $symbol = $market['symbol'];
+        $open = $this->safe_float($ticker, 'Open');
+        $last = $this->safe_float($ticker, 'LastPrice');
+        $change = $last - $open;
+        $baseVolume = $this->safe_float($ticker, 'Volume');
+        $quoteVolume = $this->safe_float($ticker, 'BaseVolume');
+        $vwap = null;
+        if ($quoteVolume !== null)
+            if ($baseVolume !== null)
+                if ($baseVolume > 0)
+                    $vwap = $quoteVolume / $baseVolume;
         return array (
             'symbol' => $symbol,
             'info' => $ticker,
@@ -216,17 +210,19 @@ class cryptopia extends Exchange {
             'high' => floatval ($ticker['High']),
             'low' => floatval ($ticker['Low']),
             'bid' => floatval ($ticker['BidPrice']),
+            'bidVolume' => null,
             'ask' => floatval ($ticker['AskPrice']),
-            'vwap' => null,
-            'open' => floatval ($ticker['Open']),
-            'close' => floatval ($ticker['Close']),
-            'first' => null,
-            'last' => floatval ($ticker['LastPrice']),
-            'change' => floatval ($ticker['Change']),
-            'percentage' => null,
-            'average' => null,
-            'baseVolume' => floatval ($ticker['Volume']),
-            'quoteVolume' => floatval ($ticker['BaseVolume']),
+            'askVolume' => null,
+            'vwap' => $vwap,
+            'open' => $open,
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
+            'change' => $change,
+            'percentage' => floatval ($ticker['Change']),
+            'average' => $this->sum ($last, $open) / 2,
+            'baseVolume' => $baseVolume,
+            'quoteVolume' => $quoteVolume,
         );
     }
 
@@ -250,12 +246,12 @@ class cryptopia extends Exchange {
             $id = $ticker['TradePairId'];
             $recognized = (is_array ($this->markets_by_id) && array_key_exists ($id, $this->markets_by_id));
             if (!$recognized)
-                throw new ExchangeError ($this->id . ' fetchTickers() returned unrecognized pair $id ' . $id);
+                throw new ExchangeError ($this->id . ' fetchTickers() returned unrecognized pair $id ' . (string) $id);
             $market = $this->markets_by_id[$id];
             $symbol = $market['symbol'];
             $result[$symbol] = $this->parse_ticker($ticker, $market);
         }
-        return $result;
+        return $this->filter_by_array($result, 'symbol', $symbols);
     }
 
     public function parse_trade ($trade, $market = null) {
@@ -309,7 +305,7 @@ class cryptopia extends Exchange {
         if ($since !== null) {
             $elapsed = $this->milliseconds () - $since;
             $hour = 1000 * 60 * 60;
-            $hours = intval ($elapsed / $hour);
+            $hours = intval ((int) ceil ($elapsed / $hour));
         }
         $request = array (
             'id' => $market['id'],
@@ -586,26 +582,28 @@ class cryptopia extends Exchange {
         return $result;
     }
 
-    public function fetch_deposit_address ($currency, $params = array ()) {
-        $currencyId = $this->currency_id ($currency);
+    public function fetch_deposit_address ($code, $params = array ()) {
+        $currency = $this->currency ($code);
         $response = $this->privatePostGetDepositAddress (array_merge (array (
-            'Currency' => $currencyId,
+            'Currency' => $currency['id'],
         ), $params));
         $address = $this->safe_string($response['Data'], 'BaseAddress');
         if (!$address)
             $address = $this->safe_string($response['Data'], 'Address');
+        $this->check_address($address);
         return array (
-            'currency' => $currency,
+            'currency' => $code,
             'address' => $address,
             'status' => 'ok',
             'info' => $response,
         );
     }
 
-    public function withdraw ($currency, $amount, $address, $tag = null, $params = array ()) {
-        $currencyId = $this->currency_id ($currency);
+    public function withdraw ($code, $amount, $address, $tag = null, $params = array ()) {
+        $currency = $this->currency ($code);
+        $this->check_address($address);
         $request = array (
-            'Currency' => $currencyId,
+            'Currency' => $currency['id'],
             'Amount' => $amount,
             'Address' => $address, // Address must exist in you AddressBook in security settings
         );

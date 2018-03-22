@@ -23,7 +23,6 @@ class gemini (Exchange):
                 'CORS': False,
                 'fetchBidsAsks': False,
                 'fetchTickers': False,
-                'fetchOHLCV': False,
                 'fetchMyTrades': True,
                 'fetchOrder': False,
                 'fetchOrders': False,
@@ -115,6 +114,7 @@ class gemini (Exchange):
         timestamp = ticker['volume']['timestamp']
         baseVolume = market['base']
         quoteVolume = market['quote']
+        last = float(ticker['last'])
         return {
             'symbol': symbol,
             'timestamp': timestamp,
@@ -122,12 +122,14 @@ class gemini (Exchange):
             'high': None,
             'low': None,
             'bid': float(ticker['bid']),
+            'bidVolume': None,
             'ask': float(ticker['ask']),
+            'askVolume': None,
             'vwap': None,
             'open': None,
-            'close': None,
-            'first': None,
-            'last': float(ticker['last']),
+            'close': last,
+            'last': last,
+            'previousClose': None,
             'change': None,
             'percentage': None,
             'average': None,
@@ -139,8 +141,8 @@ class gemini (Exchange):
     def parse_trade(self, trade, market):
         timestamp = trade['timestampms']
         order = None
-        if 'orderId' in trade:
-            order = str(trade['orderId'])
+        if 'order_id' in trade:
+            order = str(trade['order_id'])
         fee = self.safe_float(trade, 'fee_amount')
         if fee is not None:
             currency = self.safe_string(trade, 'fee_currency')
@@ -214,7 +216,7 @@ class gemini (Exchange):
 
     async def cancel_order(self, id, symbol=None, params={}):
         await self.load_markets()
-        return await self.privatePostCancelOrder({'order_id': id})
+        return await self.privatePostOrderCancel({'order_id': id})
 
     async def fetch_my_trades(self, symbol=None, since=None, limit=None, params={}):
         if symbol is None:
@@ -230,6 +232,7 @@ class gemini (Exchange):
         return self.parse_trades(response, market, since, limit)
 
     async def withdraw(self, code, amount, address, tag=None, params={}):
+        self.check_address(address)
         await self.load_markets()
         currency = self.currency(code)
         response = await self.privatePostWithdrawCurrency(self.extend({

@@ -20,6 +20,7 @@ class lakebtc (Exchange):
             'has': {
                 'CORS': True,
                 'createMarketOrder': False,
+                'fetchTickers': True,
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/28074120-72b7c38a-6660-11e7-92d9-d9027502281d.jpg',
@@ -110,14 +111,12 @@ class lakebtc (Exchange):
         }, params))
         return self.parse_order_book(orderbook)
 
-    async def fetch_ticker(self, symbol, params={}):
-        await self.load_markets()
-        market = self.market(symbol)
-        tickers = await self.publicGetTicker(self.extend({
-            'symbol': market['id'],
-        }, params))
-        ticker = tickers[market['id']]
+    def parse_ticker(self, ticker, market=None):
         timestamp = self.milliseconds()
+        symbol = None
+        if market is not None:
+            symbol = market['symbol']
+        last = self.safe_float(ticker, 'last')
         return {
             'symbol': symbol,
             'timestamp': timestamp,
@@ -125,12 +124,14 @@ class lakebtc (Exchange):
             'high': self.safe_float(ticker, 'high'),
             'low': self.safe_float(ticker, 'low'),
             'bid': self.safe_float(ticker, 'bid'),
+            'bidVolume': None,
             'ask': self.safe_float(ticker, 'ask'),
+            'askVolume': None,
             'vwap': None,
             'open': None,
-            'close': None,
-            'first': None,
-            'last': self.safe_float(ticker, 'last'),
+            'close': last,
+            'last': last,
+            'previousClose': None,
             'change': None,
             'percentage': None,
             'average': None,
@@ -138,6 +139,27 @@ class lakebtc (Exchange):
             'quoteVolume': None,
             'info': ticker,
         }
+
+    async def fetch_tickers(self, symbols=None, params={}):
+        await self.load_markets()
+        tickers = await self.publicGetTicker(params)
+        ids = list(tickers.keys())
+        result = {}
+        for i in range(0, len(ids)):
+            symbol = ids[i]
+            ticker = tickers[symbol]
+            market = None
+            if symbol in self.markets_by_id:
+                market = self.markets_by_id[symbol]
+                symbol = market['symbol']
+            result[symbol] = self.parse_ticker(ticker, market)
+        return result
+
+    async def fetch_ticker(self, symbol, params={}):
+        await self.load_markets()
+        market = self.market(symbol)
+        tickers = await self.publicGetTicker(params)
+        return self.parse_ticker(tickers[market['id']], market)
 
     def parse_trade(self, trade, market):
         timestamp = trade['date'] * 1000
@@ -162,14 +184,14 @@ class lakebtc (Exchange):
         }, params))
         return self.parse_trades(response, market, since, limit)
 
-    async def create_order(self, market, type, side, amount, price=None, params={}):
+    async def create_order(self, symbol, type, side, amount, price=None, params={}):
         await self.load_markets()
         if type == 'market':
             raise ExchangeError(self.id + ' allows limit orders only')
         method = 'privatePost' + self.capitalize(side) + 'Order'
-        marketId = self.market_id(market)
+        market = self.market(symbol)
         order = {
-            'params': [price, amount, marketId],
+            'params': [price, amount, market['id']],
         }
         response = await getattr(self, method)(self.extend(order, params))
         return {

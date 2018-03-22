@@ -3,7 +3,7 @@
 //  ---------------------------------------------------------------------------
 
 const Exchange = require ('./base/Exchange');
-const { ExchangeError, AuthenticationError, DDoSProtection, ExchangeNotAvailable, InvalidOrder, OrderNotFound } = require ('./base/errors');
+const { ExchangeError, AuthenticationError, DDoSProtection, ExchangeNotAvailable, InvalidOrder, OrderNotFound, PermissionDenied } = require ('./base/errors');
 
 //  ---------------------------------------------------------------------------
 
@@ -75,9 +75,8 @@ module.exports = class bibox extends Exchange {
                 'funding': {
                     'tierBased': false,
                     'percentage': false,
-                    'withdraw': {
-                    },
-                    'deposit': 0.0,
+                    'withdraw': {},
+                    'deposit': {},
                 },
             },
         });
@@ -133,6 +132,7 @@ module.exports = class bibox extends Exchange {
         } else {
             symbol = ticker['coin_symbol'] + '/' + ticker['currency_symbol'];
         }
+        let last = this.safeFloat (ticker, 'last');
         return {
             'symbol': symbol,
             'timestamp': timestamp,
@@ -140,16 +140,18 @@ module.exports = class bibox extends Exchange {
             'high': this.safeFloat (ticker, 'high'),
             'low': this.safeFloat (ticker, 'low'),
             'bid': this.safeFloat (ticker, 'buy'),
+            'bidVolume': undefined,
             'ask': this.safeFloat (ticker, 'sell'),
+            'askVolume': undefined,
             'vwap': undefined,
             'open': undefined,
-            'close': undefined,
-            'first': undefined,
-            'last': this.safeFloat (ticker, 'last'),
+            'close': last,
+            'last': last,
+            'previousClose': undefined,
             'change': undefined,
             'percentage': this.safeString (ticker, 'percent'),
             'average': undefined,
-            'baseVolume': this.safeFloat (ticker, 'vol'),
+            'baseVolume': this.safeFloat (ticker, 'vol24H'),
             'quoteVolume': undefined,
             'info': ticker,
         };
@@ -165,21 +167,19 @@ module.exports = class bibox extends Exchange {
         return this.parseTicker (response['result'], market);
     }
 
+    parseTickers (rawTickers, symbols = undefined) {
+        let tickers = [];
+        for (let i = 0; i < rawTickers.length; i++) {
+            tickers.push (this.parseTicker (rawTickers[i]));
+        }
+        return this.filterByArray (tickers, 'symbol', symbols);
+    }
+
     async fetchTickers (symbols = undefined, params = {}) {
         let response = await this.publicGetMdata (this.extend ({
             'cmd': 'marketAll',
         }, params));
-        let tickers = response['result'];
-        let result = {};
-        for (let t = 0; t < tickers.length; t++) {
-            let ticker = this.parseTicker (tickers[t]);
-            let symbol = ticker['symbol'];
-            if (symbols && (!(symbols.includes(symbol))) && false) { // MJM fixed bug and removed filter
-                continue;
-            }
-            result[symbol] = ticker;
-        }
-        return result;
+        return this.parseTickers (response['result']); // MJM removed filter by symbols
     }
 
     parseMyTrade (trade) { // MJM
@@ -527,19 +527,21 @@ module.exports = class bibox extends Exchange {
         await this.loadMarkets ();
         let currency = this.currency (code);
         let response = await this.privatePostTransfer ({
-            'cmd': 'transfer/transferOutInfo',
+            'cmd': 'transfer/transferIn',
             'body': this.extend ({
                 'coin_symbol': currency['id'],
             }, params),
         });
+        let address = this.safeString (response, 'result');
         let result = {
             'info': response,
-            'address': undefined,
+            'address': address,
         };
         return result;
     }
 
     async withdraw (code, amount, address, tag = undefined, params = {}) {
+        this.checkAddress (address);
         await this.loadMarkets ();
         let currency = this.currency (code);
         if (typeof this.password === 'undefined')
@@ -603,7 +605,9 @@ module.exports = class bibox extends Exchange {
                     // The number of orders can not be less than
                     throw new InvalidOrder (message);
                 else if (code === '3012')
-                    throw new AuthenticationError (message); // invalid api key
+                    throw new AuthenticationError (message); // invalid apiKey
+                else if (code === '3024')
+                    throw new PermissionDenied (message); // insufficient apiKey permissions
                 else if (code === '3025')
                     throw new AuthenticationError (message); // signature failed
                 else if (code === '4000')

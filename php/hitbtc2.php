@@ -18,6 +18,7 @@ class hitbtc2 extends hitbtc {
                 'createDepositAddress' => true,
                 'fetchDepositAddress' => true,
                 'CORS' => true,
+                'editOrder' => true,
                 'fetchCurrencies' => true,
                 'fetchOHLCV' => true,
                 'fetchTickers' => true,
@@ -530,19 +531,6 @@ class hitbtc2 extends hitbtc {
         ));
     }
 
-    public function common_currency_code ($currency) {
-        $currencies = array (
-            'XBT' => 'BTC',
-            'DRK' => 'DASH',
-            'CAT' => 'BitClave',
-            'USD' => 'USDT',
-            'EMGO' => 'MGO',
-        );
-        if (is_array ($currencies) && array_key_exists ($currency, $currencies))
-            return $currencies[$currency];
-        return $currency;
-    }
-
     public function fee_to_precision ($symbol, $fee) {
         return $this->truncate ($fee, 8);
     }
@@ -632,7 +620,7 @@ class hitbtc2 extends hitbtc {
                 'name' => $currency['fullName'],
                 'active' => $active,
                 'status' => $status,
-                'fee' => null, // todo => redesign
+                'fee' => $this->safe_float($currency, 'payoutFee'), // todo => redesign
                 'precision' => $precision,
                 'limits' => array (
                     'amount' => array (
@@ -686,7 +674,7 @@ class hitbtc2 extends hitbtc {
             floatval ($ohlcv['max']),
             floatval ($ohlcv['min']),
             floatval ($ohlcv['close']),
-            floatval ($ohlcv['volumeQuote']),
+            floatval ($ohlcv['volume']),
         ];
     }
 
@@ -719,6 +707,24 @@ class hitbtc2 extends hitbtc {
         $symbol = null;
         if ($market)
             $symbol = $market['symbol'];
+        $baseVolume = $this->safe_float($ticker, 'volume');
+        $quoteVolume = $this->safe_float($ticker, 'volumeQuote');
+        $open = $this->safe_float($ticker, 'open');
+        $last = $this->safe_float($ticker, 'last');
+        $change = null;
+        $percentage = null;
+        $average = null;
+        if ($last !== null && $open !== null) {
+            $change = $last - $open;
+            $average = $this->sum ($last, $open) / 2;
+            if ($open > 0)
+                $percentage = $change / $open * 100;
+        }
+        $vwap = null;
+        if ($quoteVolume !== null)
+            if ($baseVolume !== null)
+                if ($baseVolume > 0)
+                    $vwap = $quoteVolume / $baseVolume;
         return array (
             'symbol' => $symbol,
             'timestamp' => $timestamp,
@@ -726,17 +732,19 @@ class hitbtc2 extends hitbtc {
             'high' => $this->safe_float($ticker, 'high'),
             'low' => $this->safe_float($ticker, 'low'),
             'bid' => $this->safe_float($ticker, 'bid'),
+            'bidVolume' => null,
             'ask' => $this->safe_float($ticker, 'ask'),
-            'vwap' => null,
-            'open' => $this->safe_float($ticker, 'open'),
-            'close' => $this->safe_float($ticker, 'close'),
-            'first' => null,
-            'last' => $this->safe_float($ticker, 'last'),
-            'change' => null,
-            'percentage' => null,
-            'average' => null,
-            'baseVolume' => $this->safe_float($ticker, 'volume'),
-            'quoteVolume' => $this->safe_float($ticker, 'volumeQuote'),
+            'askVolume' => null,
+            'vwap' => $vwap,
+            'open' => $open,
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
+            'change' => $change,
+            'percentage' => $percentage,
+            'average' => $average,
+            'baseVolume' => $baseVolume,
+            'quoteVolume' => $quoteVolume,
             'info' => $ticker,
         );
     }
@@ -844,6 +852,27 @@ class hitbtc2 extends hitbtc {
         $order = $this->parse_order($response);
         $id = $order['id'];
         $this->orders[$id] = $order;
+        return $order;
+    }
+
+    public function edit_order ($id, $symbol, $type, $side, $amount = null, $price = null, $params = array ()) {
+        $this->load_markets();
+        // their max accepted length is 32 characters
+        $uuid = $this->uuid ();
+        $parts = explode ('-', $uuid);
+        $requestClientId = implode ('', $parts);
+        $requestClientId = mb_substr ($requestClientId, 0, 32);
+        $request = array (
+            'clientOrderId' => $id,
+            'requestClientId' => $requestClientId,
+        );
+        if ($amount !== null)
+            $request['quantity'] = $this->amount_to_precision($symbol, floatval ($amount));
+        if ($price !== null)
+            $request['price'] = $this->price_to_precision($symbol, $price);
+        $response = $this->privatePatchOrderClientOrderId (array_merge ($request, $params));
+        $order = $this->parse_order($response);
+        $this->orders[$order['id']] = $order;
         return $order;
     }
 
@@ -956,18 +985,20 @@ class hitbtc2 extends hitbtc {
         if ($since !== null)
             $request['from'] = $this->iso8601 ($since);
         $response = $this->privateGetHistoryOrder (array_merge ($request, $params));
-        return $this->parse_orders($response, $market, $since, $limit);
+        $orders = $this->parse_orders($response, $market);
+        $orders = $this->filter_by($orders, 'status', 'closed');
+        return $this->filter_by_since_limit($orders, $since, $limit);
     }
 
     public function fetch_my_trades ($symbol = null, $since = null, $limit = null, $params = array ()) {
         $this->load_markets();
         $request = array (
             // 'symbol' => 'BTC/USD', // optional
-            // 'sort' => 'DESC', // or 'ASC'
-            // 'by' => 'timestamp', // or 'id'	String	timestamp by default, or id
-            // 'from':	'Datetime or Number', // ISO 8601
-            // 'till':	'Datetime or Number',
-            // 'limit' => 100,
+            // 'sort' =>   'DESC', // or 'ASC'
+            // 'by' =>     'timestamp', // or 'id' String timestamp by default, or id
+            // 'from' =>   'Datetime or Number', // ISO 8601
+            // 'till' =>   'Datetime or Number',
+            // 'limit' =>  100,
             // 'offset' => 0,
         );
         $market = null;
@@ -1007,6 +1038,7 @@ class hitbtc2 extends hitbtc {
             'currency' => $currency['id'],
         ));
         $address = $response['address'];
+        $this->check_address($address);
         $tag = $this->safe_string($response, 'paymentId');
         return array (
             'currency' => $currency,
@@ -1024,6 +1056,7 @@ class hitbtc2 extends hitbtc {
             'currency' => $currency['id'],
         ));
         $address = $response['address'];
+        $this->check_address($address);
         $tag = $this->safe_string($response, 'paymentId');
         return array (
             'currency' => $currency,
@@ -1035,6 +1068,7 @@ class hitbtc2 extends hitbtc {
     }
 
     public function withdraw ($code, $amount, $address, $tag = null, $params = array ()) {
+        $this->check_address($address);
         $currency = $this->currency ($code);
         $request = array (
             'currency' => $currency['id'],

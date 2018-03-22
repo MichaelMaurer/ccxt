@@ -19,7 +19,7 @@ class flowbtc extends Exchange {
             ),
             'urls' => array (
                 'logo' => 'https://user-images.githubusercontent.com/1294454/28162465-cd815d4c-67cf-11e7-8e57-438bea0523a2.jpg',
-                'api' => 'https://api.flowbtc.com:8400/ajax',
+                'api' => 'https://api.flowbtc.com:8405/ajax',
                 'www' => 'https://trader.flowbtc.com',
                 'doc' => 'http://www.flowbtc.com.br/api/',
             ),
@@ -70,7 +70,7 @@ class flowbtc extends Exchange {
             $base = $market['product1Label'];
             $quote = $market['product2Label'];
             $symbol = $base . '/' . $quote;
-            $result[] = array (
+            $result[$symbol] = array (
                 'id' => $id,
                 'symbol' => $symbol,
                 'base' => $base,
@@ -116,6 +116,7 @@ class flowbtc extends Exchange {
             'productPair' => $market['id'],
         ), $params));
         $timestamp = $this->milliseconds ();
+        $last = floatval ($ticker['last']);
         return array (
             'symbol' => $symbol,
             'timestamp' => $timestamp,
@@ -123,12 +124,14 @@ class flowbtc extends Exchange {
             'high' => floatval ($ticker['high']),
             'low' => floatval ($ticker['low']),
             'bid' => floatval ($ticker['bid']),
+            'bidVolume' => null,
             'ask' => floatval ($ticker['ask']),
+            'askVolume' => null,
             'vwap' => null,
             'open' => null,
-            'close' => null,
-            'first' => null,
-            'last' => floatval ($ticker['last']),
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
             'change' => null,
             'percentage' => null,
             'average' => null,

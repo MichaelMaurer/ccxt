@@ -17,6 +17,7 @@ class poloniex extends Exchange {
                 'createDepositAddress' => true,
                 'fetchDepositAddress' => true,
                 'CORS' => false,
+                'editOrder' => true,
                 'createMarketOrder' => false,
                 'fetchOHLCV' => true,
                 'fetchMyTrades' => true,
@@ -119,6 +120,10 @@ class poloniex extends Exchange {
                 'amount' => 8,
                 'price' => 8,
             ),
+            'commonCurrencies' => array (
+                'BTM' => 'Bitmark',
+                'STR' => 'XLM',
+            ),
         ));
     }
 
@@ -140,22 +145,6 @@ class poloniex extends Exchange {
         );
     }
 
-    public function common_currency_code ($currency) {
-        if ($currency === 'BTM')
-            return 'Bitmark';
-        if ($currency === 'STR')
-            return 'XLM';
-        return $currency;
-    }
-
-    public function currency_id ($currency) {
-        if ($currency === 'Bitmark')
-            return 'BTM';
-        if ($currency === 'XLM')
-            return 'STR';
-        return $currency;
-    }
-
     public function parse_ohlcv ($ohlcv, $market = null, $timeframe = '5m', $since = null, $limit = null) {
         return [
             $ohlcv['date'] * 1000,
@@ -163,7 +152,7 @@ class poloniex extends Exchange {
             $ohlcv['high'],
             $ohlcv['low'],
             $ohlcv['close'],
-            $ohlcv['volume'],
+            $ohlcv['quoteVolume'],
         ];
     }
 
@@ -200,7 +189,24 @@ class poloniex extends Exchange {
                 'base' => $base,
                 'quote' => $quote,
                 'active' => true,
-                'lot' => $this->limits['amount']['min'],
+                'precision' => array (
+                    'amount' => 8,
+                    'price' => 8,
+                ),
+                'limits' => array (
+                    'amount' => array (
+                        'min' => 0.00000001,
+                        'max' => 1000000000,
+                    ),
+                    'price' => array (
+                        'min' => 0.00000001,
+                        'max' => 1000000000,
+                    ),
+                    'cost' => array (
+                        'min' => 0.00000000,
+                        'max' => 1000000000,
+                    ),
+                ),
                 'info' => $market,
             ));
         }
@@ -257,6 +263,16 @@ class poloniex extends Exchange {
         $symbol = null;
         if ($market)
             $symbol = $market['symbol'];
+        $open = null;
+        $change = null;
+        $average = null;
+        $last = floatval ($ticker['last']);
+        $relativeChange = floatval ($ticker['percentChange']);
+        if ($relativeChange !== -1) {
+            $open = $last / $this->sum (1, $relativeChange);
+            $change = $last - $open;
+            $average = $this->sum ($last, $open) / 2;
+        }
         return array (
             'symbol' => $symbol,
             'timestamp' => $timestamp,
@@ -264,15 +280,17 @@ class poloniex extends Exchange {
             'high' => floatval ($ticker['high24hr']),
             'low' => floatval ($ticker['low24hr']),
             'bid' => floatval ($ticker['highestBid']),
+            'bidVolume' => null,
             'ask' => floatval ($ticker['lowestAsk']),
+            'askVolume' => null,
             'vwap' => null,
-            'open' => null,
-            'close' => null,
-            'first' => null,
-            'last' => floatval ($ticker['last']),
-            'change' => floatval ($ticker['percentChange']),
-            'percentage' => null,
-            'average' => null,
+            'open' => $open,
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
+            'change' => $change,
+            'percentage' => $relativeChange * 100,
+            'average' => $average,
             'baseVolume' => floatval ($ticker['quoteVolume']),
             'quoteVolume' => floatval ($ticker['baseVolume']),
             'info' => $ticker,
@@ -317,7 +335,7 @@ class poloniex extends Exchange {
                 'name' => $currency['name'],
                 'active' => $active,
                 'status' => $status,
-                'fee' => $currency['txFee'], // todo => redesign
+                'fee' => $this->safe_float($currency, 'txFee'), // todo => redesign
                 'precision' => $precision,
                 'limits' => array (
                     'amount' => array (
@@ -471,13 +489,16 @@ class poloniex extends Exchange {
         if ($market)
             $symbol = $market['symbol'];
         $price = $this->safe_float($order, 'price');
-        $cost = $this->safe_float($order, 'total', 0.0);
         $remaining = $this->safe_float($order, 'amount');
         $amount = $this->safe_float($order, 'startingAmount', $remaining);
         $filled = null;
+        $cost = 0;
         if ($amount !== null) {
-            if ($remaining !== null)
+            if ($remaining !== null) {
                 $filled = $amount - $remaining;
+                if ($price !== null)
+                    $cost = $filled * $price;
+            }
         }
         if ($filled === null) {
             if ($trades !== null) {
@@ -719,42 +740,44 @@ class poloniex extends Exchange {
         return $this->parse_trades($trades);
     }
 
-    public function create_deposit_address ($currency, $params = array ()) {
-        $currencyId = $this->currency_id ($currency);
+    public function create_deposit_address ($code, $params = array ()) {
+        $currency = $this->currency ($code);
         $response = $this->privatePostGenerateNewAddress (array (
-            'currency' => $currencyId,
+            'currency' => $currency['id'],
         ));
         $address = null;
         if ($response['success'] === 1)
             $address = $this->safe_string($response, 'response');
-        if (!$address)
-            throw new ExchangeError ($this->id . ' createDepositAddress failed => ' . $this->last_http_response);
+        $this->check_address($address);
         return array (
-            'currency' => $currency,
+            'currency' => $code,
             'address' => $address,
             'status' => 'ok',
             'info' => $response,
         );
     }
 
-    public function fetch_deposit_address ($currency, $params = array ()) {
+    public function fetch_deposit_address ($code, $params = array ()) {
+        $currency = $this->currency ($code);
         $response = $this->privatePostReturnDepositAddresses ();
-        $currencyId = $this->currency_id ($currency);
+        $currencyId = $currency['id'];
         $address = $this->safe_string($response, $currencyId);
+        $this->check_address($address);
         $status = $address ? 'ok' : 'none';
         return array (
-            'currency' => $currency,
+            'currency' => $code,
             'address' => $address,
             'status' => $status,
             'info' => $response,
         );
     }
 
-    public function withdraw ($currency, $amount, $address, $tag = null, $params = array ()) {
+    public function withdraw ($code, $amount, $address, $tag = null, $params = array ()) {
+        $this->check_address($address);
         $this->load_markets();
-        $currencyId = $this->currency_id ($currency);
+        $currency = $this->currency ($code);
         $request = array (
-            'currency' => $currencyId,
+            'currency' => $currency['id'],
             'amount' => $amount,
             'address' => $address,
         );
@@ -790,24 +813,34 @@ class poloniex extends Exchange {
     }
 
     public function handle_errors ($code, $reason, $url, $method, $headers, $body) {
-        if ($body[0] === '{') {
+        $response = null;
+        try {
             $response = json_decode ($body, $as_associative_array = true);
-            if (is_array ($response) && array_key_exists ('error', $response)) {
-                $error = $response['error'];
-                $feedback = $this->id . ' ' . $this->json ($response);
-                if ($error === 'Invalid order number, or you are not the person who placed the order.') {
-                    throw new OrderNotFound ($feedback);
-                } else if (mb_strpos ($error, 'Total must be at least') !== false) {
-                    throw new InvalidOrder ($feedback);
-                } else if (mb_strpos ($error, 'Not enough') !== false) {
-                    throw new InsufficientFunds ($feedback);
-                } else if (mb_strpos ($error, 'Nonce must be greater') !== false) {
-                    throw new ExchangeNotAvailable ($feedback);
-                } else if (mb_strpos ($error, 'You have already called cancelOrder or moveOrder on this order.') !== false) {
-                    throw new CancelPending ($feedback);
-                } else {
-                    throw new ExchangeError ($this->id . ' => unknown $error => ' . $this->json ($response));
-                }
+        } catch (Exception $e) {
+            // syntax $error, resort to default $error handler
+            return;
+        }
+        if (is_array ($response) && array_key_exists ('error', $response)) {
+            $error = $response['error'];
+            $feedback = $this->id . ' ' . $this->json ($response);
+            if ($error === 'Invalid order number, or you are not the person who placed the order.') {
+                throw new OrderNotFound ($feedback);
+            } else if ($error === 'Order not found, or you are not the person who placed it.') {
+                throw new OrderNotFound ($feedback);
+            } else if ($error === 'Invalid API key/secret pair.') {
+                throw new AuthenticationError ($feedback);
+            } else if ($error === 'Please do not make more than 8 API calls per second.') {
+                throw new DDoSProtection ($feedback);
+            } else if (mb_strpos ($error, 'Total must be at least') !== false) {
+                throw new InvalidOrder ($feedback);
+            } else if (mb_strpos ($error, 'Not enough') !== false) {
+                throw new InsufficientFunds ($feedback);
+            } else if (mb_strpos ($error, 'Nonce must be greater') !== false) {
+                throw new InvalidNonce ($feedback);
+            } else if (mb_strpos ($error, 'You have already called cancelOrder or moveOrder on this order.') !== false) {
+                throw new CancelPending ($feedback);
+            } else {
+                throw new ExchangeError ($this->id . ' => unknown $error => ' . $this->json ($response));
             }
         }
     }

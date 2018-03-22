@@ -1,17 +1,11 @@
 "use strict";
 
 const fs   = require ('fs')
-const path = require ('path')
-const log  = require ('ololog')
-const ansi = require ('ansicolor').nice
-
-// ----------------------------------------------------------------------------
-
-const { capitalize } = require ('./js/base/functions.js')
-
-// ----------------------------------------------------------------------------
-
-const errors = require ('./js/base/errors.js')
+    , path = require ('path')
+    , log  = require ('ololog')
+    , ansi = require ('ansicolor').nice
+    , { capitalize } = require ('./js/base/functions.js')
+    , errors = require ('./js/base/errors.js')
 
 // ---------------------------------------------------------------------------
 
@@ -56,7 +50,9 @@ const commonRegexes = [
     [ /\.parseBalance\s/g, '.parse_balance'],
     [ /\.parseOHLCVs\s/g, '.parse_ohlcvs'],
     [ /\.parseOHLCV\s/g, '.parse_ohlcv'],
+    [ /\.parseDate\s/g, '.parse_date'],
     [ /\.parseTicker\s/g, '.parse_ticker'],
+    [ /\.parseTimeframe\s/g, '.parse_timeframe'],
     [ /\.parseTradesData\s/g, '.parse_trades_data'],
     [ /\.parseTrades\s/g, '.parse_trades'],
     [ /\.parseTrade\s/g, '.parse_trade'],
@@ -66,13 +62,17 @@ const commonRegexes = [
     [ /\.parseOrders\s/g, '.parse_orders'],
     [ /\.parseOrderStatus\s/g, '.parse_order_status'],
     [ /\.parseOrder\s/g, '.parse_order'],
+    [ /\.filterByArray\s/g, '.filter_by_array'],
+    [ /\.filterBySymbolSinceLimit\s/g, '.filter_by_symbol_since_limit'],
     [ /\.filterBySinceLimit\s/g, '.filter_by_since_limit'],
-    [ /\.filterOrdersBySymbol\s/g, '.filter_orders_by_symbol'],
+    [ /\.filterBySymbol\s/g, '.filter_by_symbol'],
     [ /\.getVersionString\s/g, '.get_version_string'],
     [ /\.indexBy\s/g, '.index_by'],
     [ /\.sortBy\s/g, '.sort_by'],
     [ /\.filterBy\s/g, '.filter_by'],
     [ /\.groupBy\s/g, '.group_by'],
+    [ /\.findMarket\s/g, '.find_market'],
+    [ /\.findSymbol\s/g, '.find_symbol'],
     [ /\.marketIds\s/g, '.market_ids'],
     [ /\.marketId\s/g, '.market_id'],
     [ /\.fetchFundingFees\s/g, '.fetch_funding_fees'],
@@ -85,6 +85,7 @@ const commonRegexes = [
     [ /\.fetchOpenOrders\s/g, '.fetch_open_orders'],
     [ /\.fetchOpenOrder\s/g, '.fetch_open_order'],
     [ /\.fetchOrders\s/g, '.fetch_orders'],
+    [ /\.fetchOrderTrades\s/g, '.fetch_order_trades'],
     [ /\.fetchOrder\s/g, '.fetch_order'],
     [ /\.fetchBidsAsks\s/g, '.fetch_bids_asks'],
     [ /\.fetchTickers\s/g, '.fetch_tickers'],
@@ -111,6 +112,7 @@ const commonRegexes = [
     [ /\.throwExceptionOnError\s/g, '.throw_exception_on_error'],
     [ /\.handleErrors\s/g, '.handle_errors'],
     [ /\.checkRequiredCredentials\s/g, '.check_required_credentials'],
+    [ /\.checkAddress\s/g, '.check_address'],
 ]
 
 // ----------------------------------------------------------------------------
@@ -185,9 +187,9 @@ const pythonRegexes = [
         [ /Math\.abs\s*\(([^\)]+)\)/g, 'abs($1)' ],
         [ /Math\.pow\s*\(([^\)]+)\)/g, 'math.pow($1)' ],
         [ /Math\.round\s*\(([^\)]+)\)/g, 'int(round($1))' ],
-        [ /Math\.ceil\s*\(([^\)]+)\)/g, 'int(ceil($1))' ],
+        [ /Math\.ceil\s*\(([^\)]+)\)/g, 'int(math.ceil($1))' ],
         [ /Math\.log/g, 'math.log' ],
-        [ /(\([^\)]+\)|[^\s]+)\s*\?\s*(\([^\)]+\)|[^\s]+)\s*\:\s*(\([^\)]+\)|[^\s]+)/g, '$2 if $1 else $3'],
+        [ /(\([^\)]+\)|[^\s]+)\s*\?\s*([^\:]+)\s+\:\s*([^\n]+)/g, '$2 if $1 else $3'],
         [ / \/\//g, ' #' ],
         [ /([^\n\s]) #/g, '$1  #' ],   // PEP8 E261
         [ /\.indexOf/g, '.find'],
@@ -200,12 +202,12 @@ const pythonRegexes = [
         [ /Math\.(max|min)\s/g, '$1' ],
         [ /console\.log\s/g, 'print'],
         [ /process\.exit\s+/g, 'sys.exit'],
-        [ /([^:+=\s]+) \(/g, '$1(' ], // PEP8 E225 remove whitespaces before left ( round bracket
+        [ /([^:+=\/\*\s-]+) \(/g, '$1(' ], // PEP8 E225 remove whitespaces before left ( round bracket
         [ /\[ /g, '[' ],              // PEP8 E201 remove whitespaces after left [ square bracket
         [ /\{ /g, '{' ],              // PEP8 E201 remove whitespaces after left { bracket
         [ /([^\s]+) \]/g, '$1]' ],    // PEP8 E202 remove whitespaces before right ] square bracket
         [ /([^\s]+) \}/g, '$1}' ],    // PEP8 E202 remove whitespaces before right } bracket
-        [ /([^a-z])(elif|if|or)\(/g, '$1$2 \(' ], // a correction for PEP8 E225 side-effect for compound and ternary conditionals
+        [ /([^a-z])(elif|if|or|else)\(/g, '$1$2 \(' ], // a correction for PEP8 E225 side-effect for compound and ternary conditionals
         [ /\=\=\sTrue/g, 'is True' ], // a correction for PEP8 E712, it likes "is True", not "== True"
     ])
 
@@ -281,13 +283,13 @@ const pythonRegexes = [
         [ /parseInt\s/g, 'intval '],
         [ / \+ /g, ' . ' ],
         [ / \+\= /g, ' .= ' ],
-        [ /([^\s]+(?:\s*\(.+\))?)\.toUpperCase\s*\(\)/g, 'strtoupper ($1)' ],
-        [ /([^\s]+(?:\s*\(.+\))?)\.toLowerCase\s*\(\)/g, 'strtolower ($1)' ],
-        [ /([^\s]+(?:\s*\(.+\))?)\.replace\s*\(([^\)]+)\)/g, 'str_replace ($2, $1)' ],
+        [ /([^\s\(]+(?:\s*\(.+\))?)\.toUpperCase\s*\(\)/g, 'strtoupper ($1)' ],
+        [ /([^\s\(]+(?:\s*\(.+\))?)\.toLowerCase\s*\(\)/g, 'strtolower ($1)' ],
+        [ /([^\s\(]+(?:\s*\(.+\))?)\.replace\s*\(([^\)]+)\)/g, 'str_replace ($2, $1)' ],
         [ /this\[([^\]+]+)\]/g, '$$this->$$$1' ],
-        [ /([^\s]+).slice \(([^\)\:]+)\)/g, 'mb_substr ($1, $2)' ],
-        [ /([^\s]+).slice \(([^\,\)]+)\,\s*([^\)]+)\)/g, 'mb_substr ($1, $2, $3)' ],
-        [ /([^\s]+).split \(([^\,]+?)\)/g, 'explode ($2, $1)' ],
+        [ /([^\s\(]+).slice \(([^\)\:]+)\)/g, 'mb_substr ($1, $2)' ],
+        [ /([^\s\(]+).slice \(([^\,\)]+)\,\s*([^\)]+)\)/g, 'mb_substr ($1, $2, $3)' ],
+        [ /([^\s\(]+).split \(([^\,]+?)\)/g, 'explode ($2, $1)' ],
         [ /Math\.floor\s*\(([^\)]+)\)/g, '(int) floor ($1)' ],
         [ /Math\.abs\s*\(([^\)]+)\)/g, 'abs ($1)' ],
         [ /Math\.round\s*\(([^\)]+)\)/g, '(int) round ($1)' ],
@@ -454,6 +456,10 @@ const pythonRegexes = [
             let signature = lines[0].trim ()
             let methodSignatureRegex = /(async |)([\S]+)\s\(([^)]*)\)\s*{/ // signature line
             let matches = methodSignatureRegex.exec (signature)
+
+            if (!matches) {
+                log.red (methods[i])
+            }
 
             // async or not
             let keyword = matches[1]
@@ -676,6 +682,7 @@ const pythonRegexes = [
                             line.replace ('asyncio.get_event_loop().run_until_complete(main())', 'main()')
                                 .replace ('import ccxt.async as ccxt', 'import ccxt')
                                 .replace (/.*token\_bucket.*/g, '')
+                                .replace ('await asyncio.sleep', 'time.sleep')
                                 .replace ('async ', '')
                                 .replace ('await ', ''))
                     })

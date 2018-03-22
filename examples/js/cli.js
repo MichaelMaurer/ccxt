@@ -4,15 +4,16 @@
 
 const [processPath, , exchangeId, methodName, ... params] = process.argv.filter (x => !x.startsWith ('--'))
 const verbose = process.argv.includes ('--verbose')
+const cloudscrape = process.argv.includes ('--cloudscrape')
 
 //-----------------------------------------------------------------------------
 
-const ccxt      = require ('../../ccxt.js')
-    , fs        = require ('fs')
-    , path      = require ('path')
-    , asTable   = require ('as-table')
-    , util      = require ('util')
-    , log       = require ('ololog').configure ({ locate: false })
+const ccxt         = require ('../../ccxt.js')
+    , fs           = require ('fs')
+    , path         = require ('path')
+    , asTable      = require ('as-table')
+    , util         = require ('util')
+    , log          = require ('ololog').configure ({ locate: false })
     , { ExchangeError, NetworkError } = ccxt
 
 //-----------------------------------------------------------------------------
@@ -23,6 +24,28 @@ require ('ansicolor').nice
 
 process.on ('uncaughtException',  e => { log.bright.red.error (e); process.exit (1) })
 process.on ('unhandledRejection', e => { log.bright.red.error (e); process.exit (1) })
+
+//-----------------------------------------------------------------------------
+// cloudscraper helper
+
+const scrapeCloudflareHttpHeaderCookie = (url) =>
+
+	(new Promise ((resolve, reject) => {
+
+        const cloudscraper = require ('cloudscraper')
+		return cloudscraper.get (url, function (error, response, body) {
+
+			if (error) {
+
+                log.red ('Cloudscraper error')
+				reject (error)
+
+			} else {
+
+				resolve (response.request.headers)
+			}
+        })
+    }))
 
 //-----------------------------------------------------------------------------
 
@@ -71,12 +94,16 @@ async function main () {
     } else {
 
         let args = params.map (param => {
-            if (param[0] === '{')
+            if (param[0] === '{' || param[0] === '[')
                 return JSON.parse (param)
             return param.match (/[a-zA-Z]/g) ? param : parseFloat (param)
         })
 
         if (typeof exchange[methodName] === 'function') {
+
+            if (cloudscrape)
+                exchange.headers = await scrapeCloudflareHttpHeaderCookie (exchange.urls.www)
+
             try {
 
                 log (exchange.id + '.' + methodName, '(' + args.join (', ') + ')')

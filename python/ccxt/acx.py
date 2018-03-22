@@ -89,12 +89,12 @@ class acx (Exchange):
                 'funding': {
                     'tierBased': False,
                     'percentage': True,
-                    'withdraw': 0.0,  # There is only 1% fee on withdrawals to your bank account.
+                    'withdraw': {},  # There is only 1% fee on withdrawals to your bank account.
                 },
             },
             'exceptions': {
-                2002: InsufficientFunds,
-                2003: OrderNotFound,
+                '2002': InsufficientFunds,
+                '2003': OrderNotFound,
             },
         })
 
@@ -156,6 +156,7 @@ class acx (Exchange):
         symbol = None
         if market:
             symbol = market['symbol']
+        last = self.safe_float(ticker, 'last', None)
         return {
             'symbol': symbol,
             'timestamp': timestamp,
@@ -163,12 +164,14 @@ class acx (Exchange):
             'high': self.safe_float(ticker, 'high', None),
             'low': self.safe_float(ticker, 'low', None),
             'bid': self.safe_float(ticker, 'buy', None),
+            'bidVolume': None,
             'ask': self.safe_float(ticker, 'sell', None),
+            'askVolume': None,
             'vwap': None,
             'open': None,
-            'close': None,
-            'first': None,
-            'last': self.safe_float(ticker, 'last', None),
+            'close': last,
+            'last': last,
+            'previousClose': None,
             'change': None,
             'percentage': None,
             'average': None,
@@ -263,7 +266,7 @@ class acx (Exchange):
             symbol = market['symbol']
         else:
             marketId = order['market']
-            symbol = self.marketsById[marketId]['symbol']
+            symbol = self.markets_by_id[marketId]['symbol']
         timestamp = self.parse8601(order['created_at'])
         state = order['state']
         status = None
@@ -301,7 +304,7 @@ class acx (Exchange):
         if type == 'limit':
             order['price'] = str(price)
         response = self.privatePostOrders(self.extend(order, params))
-        market = self.marketsById[response['market']]
+        market = self.markets_by_id[response['market']]
         return self.parse_order(response, market)
 
     def cancel_order(self, id, symbol=None, params={}):
@@ -314,6 +317,7 @@ class acx (Exchange):
         return order
 
     def withdraw(self, currency, amount, address, tag=None, params={}):
+        self.check_address(address)
         self.load_markets()
         result = self.privatePostWithdraw(self.extend({
             'currency': currency.lower(),

@@ -87,6 +87,7 @@ class mercado extends Exchange {
         ), $params));
         $ticker = $response['ticker'];
         $timestamp = intval ($ticker['date']) * 1000;
+        $last = floatval ($ticker['last']);
         return array (
             'symbol' => $symbol,
             'timestamp' => $timestamp,
@@ -94,12 +95,14 @@ class mercado extends Exchange {
             'high' => floatval ($ticker['high']),
             'low' => floatval ($ticker['low']),
             'bid' => floatval ($ticker['buy']),
+            'bidVolume' => null,
             'ask' => floatval ($ticker['sell']),
+            'askVolume' => null,
             'vwap' => null,
             'open' => null,
-            'close' => null,
-            'first' => null,
-            'last' => floatval ($ticker['last']),
+            'close' => $last,
+            'last' => $last,
+            'previousClose' => null,
             'change' => null,
             'percentage' => null,
             'average' => null,
@@ -127,9 +130,18 @@ class mercado extends Exchange {
 
     public function fetch_trades ($symbol, $since = null, $limit = null, $params = array ()) {
         $market = $this->market ($symbol);
-        $response = $this->publicGetCoinTrades (array_merge (array (
+        $method = 'publicGetCoinTrades';
+        $request = array (
             'coin' => $market['base'],
-        ), $params));
+        );
+        if ($since !== null) {
+            $method .= 'From';
+            $request['from'] = intval ($since / 1000);
+        }
+        $to = $this->safe_integer($params, 'to');
+        if ($to !== null)
+            $method .= 'To';
+        $response = $this->$method (array_merge ($request, $params));
         return $this->parse_trades($response, $market, $since, $limit);
     }
 
@@ -242,6 +254,7 @@ class mercado extends Exchange {
     }
 
     public function withdraw ($currency, $amount, $address, $tag = null, $params = array ()) {
+        $this->check_address($address);
         $this->load_markets();
         $request = array (
             'coin' => $currency,
@@ -266,8 +279,11 @@ class mercado extends Exchange {
 
     public function sign ($path, $api = 'public', $method = 'GET', $params = array (), $headers = null, $body = null) {
         $url = $this->urls['api'][$api] . '/';
+        $query = $this->omit ($params, $this->extract_params($path));
         if ($api === 'public') {
             $url .= $this->implode_params($path, $params);
+            if ($query)
+                $url .= '?' . $this->urlencode ($query);
         } else {
             $this->check_required_credentials();
             $url .= $this->version . '/';

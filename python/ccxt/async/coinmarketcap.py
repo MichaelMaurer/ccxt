@@ -21,9 +21,13 @@ class coinmarketcap (Exchange):
                 'CORS': True,
                 'privateAPI': False,
                 'createOrder': False,
+                'createMarketOrder': False,
+                'createLimitOrder': False,
                 'cancelOrder': False,
+                'editOrder': False,
                 'fetchBalance': False,
                 'fetchOrderBook': False,
+                'fetchOHLCV': False,
                 'fetchTrades': False,
                 'fetchTickers': True,
                 'fetchCurrencies': True,
@@ -89,8 +93,14 @@ class coinmarketcap (Exchange):
             'Bitgem': 'Bitgem',
             'BlockCAT': 'BlockCAT',
             'Catcoin': 'Catcoin',
+            'Hi Mutual Society': 'Hi Mutual Society',
             'iCoin': 'iCoin',
             'NetCoin': 'NetCoin',
+            # a special case, most exchanges list it as IOTA, therefore
+            # we change just the Coinmarketcap instead of changing them all
+            'MIOTA': 'IOTA',
+            'Maggie': 'Maggie',
+            'BlazeCoin': 'BlazeCoin',
         }
         if name in currencies:
             return currencies[name]
@@ -110,7 +120,7 @@ class coinmarketcap (Exchange):
                 baseId = market['id']
                 base = self.currency_code(market['symbol'], market['name'])
                 symbol = base + '/' + quote
-                id = baseId + '/' + quote
+                id = baseId + '/' + quoteId
                 result.append({
                     'id': id,
                     'symbol': symbol,
@@ -158,12 +168,14 @@ class coinmarketcap (Exchange):
             'high': None,
             'low': None,
             'bid': None,
+            'bidVolume': None,
             'ask': None,
+            'askVolume': None,
             'vwap': None,
             'open': None,
-            'close': None,
-            'first': None,
+            'close': last,
             'last': last,
+            'previousClose': None,
             'change': change,
             'percentage': None,
             'average': None,
@@ -183,7 +195,8 @@ class coinmarketcap (Exchange):
         tickers = {}
         for t in range(0, len(response)):
             ticker = response[t]
-            id = ticker['id'] + '/' + currency
+            currencyId = self.currencies[currency]['id'] if (currency in list(self.currencies.keys())) else currency.lower()
+            id = ticker['id'] + '/' + currencyId
             symbol = id
             market = None
             if id in self.markets_by_id:

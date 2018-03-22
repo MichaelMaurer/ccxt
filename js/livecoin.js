@@ -3,7 +3,7 @@
 //  ---------------------------------------------------------------------------
 
 const Exchange = require ('./base/Exchange');
-const { ExchangeError, AuthenticationError, NotSupported, InvalidOrder, OrderNotFound, ExchangeNotAvailable } = require ('./base/errors');
+const { ExchangeError, AuthenticationError, NotSupported, InvalidOrder, OrderNotFound, ExchangeNotAvailable, DDoSProtection } = require ('./base/errors');
 
 //  ---------------------------------------------------------------------------
 
@@ -23,6 +23,7 @@ module.exports = class livecoin extends Exchange {
                 'fetchOrders': true,
                 'fetchOpenOrders': true,
                 'fetchClosedOrders': true,
+                'withdraw': true,
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/27980768-f22fc424-638a-11e7-89c9-6010a54ff9be.jpg',
@@ -123,6 +124,7 @@ module.exports = class livecoin extends Exchange {
                 'symbol': symbol,
                 'base': base,
                 'quote': quote,
+                'active': true,
                 'precision': precision,
                 'limits': limits,
                 'info': market,
@@ -239,7 +241,7 @@ module.exports = class livecoin extends Exchange {
     async fetchFees (params = {}) {
         let tradingFees = await this.fetchTradingFees (params);
         return this.extend (tradingFees, {
-            'withdraw': 0.0,
+            'withdraw': {},
         });
     }
 
@@ -275,6 +277,7 @@ module.exports = class livecoin extends Exchange {
         let vwap = parseFloat (ticker['vwap']);
         let baseVolume = parseFloat (ticker['volume']);
         let quoteVolume = baseVolume * vwap;
+        let last = parseFloat (ticker['last']);
         return {
             'symbol': symbol,
             'timestamp': timestamp,
@@ -282,12 +285,14 @@ module.exports = class livecoin extends Exchange {
             'high': parseFloat (ticker['high']),
             'low': parseFloat (ticker['low']),
             'bid': parseFloat (ticker['best_bid']),
+            'bidVolume': undefined,
             'ask': parseFloat (ticker['best_ask']),
+            'askVolume': undefined,
             'vwap': parseFloat (ticker['vwap']),
             'open': undefined,
-            'close': undefined,
-            'first': undefined,
-            'last': parseFloat (ticker['last']),
+            'close': last,
+            'last': last,
+            'previousClose': undefined,
             'change': undefined,
             'percentage': undefined,
             'average': undefined,
@@ -488,6 +493,26 @@ module.exports = class livecoin extends Exchange {
         throw new ExchangeError (this.id + ' cancelOrder() failed: ' + this.json (response));
     }
 
+    async withdraw (currency, amount, address, tag = undefined, params = {}) {
+        // Sometimes the response with be { key: null } for all keys.
+        // An example is if you attempt to withdraw more than is allowed when withdrawal fees are considered.
+        await this.loadMarkets ();
+        this.checkAddress (address);
+        let wallet = address;
+        if (typeof tag !== 'undefined')
+            wallet += '::' + tag;
+        let withdrawal = {
+            'amount': amount,
+            'currency': this.commonCurrencyCode (currency),
+            'wallet': wallet,
+        };
+        let response = await this.privatePostPaymentOutCoin (this.extend (withdrawal, params));
+        return {
+            'info': response,
+            'id': this.safeInteger (response, 'id'),
+        };
+    }
+
     async fetchDepositAddress (currency, params = {}) {
         let request = {
             'currency': currency,
@@ -500,6 +525,7 @@ module.exports = class livecoin extends Exchange {
             address = parts[0];
             tag = parts[2];
         }
+        this.checkAddress (address);
         return {
             'currency': currency,
             'address': address,
@@ -563,6 +589,8 @@ module.exports = class livecoin extends Exchange {
                         throw new InvalidOrder (this.id + ': Unable to block funds ' + this.json (response));
                     } else if (error === 503) {
                         throw new ExchangeNotAvailable (this.id + ': Exchange is not available ' + this.json (response));
+                    } else if (error === 429) {
+                        throw new DDoSProtection (this.id + ': Too many requests' + this.json (response));
                     } else {
                         throw new ExchangeError (this.id + ' ' + this.json (response));
                     }
