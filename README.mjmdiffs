@@ -24,6 +24,8 @@ $ git merge master
 * Show differences from <master>: git diff master
 $ git commit -m "..."
 
+Latest merge: 742500b92343b2665154ea86790f8e674c632819 (v1.11.150) 3/22/2018
+
 
 Verbose logging
 ---------------
