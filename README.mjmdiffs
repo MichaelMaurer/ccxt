@@ -24,8 +24,8 @@ $ git merge master
 * Show differences from <master>: git diff master
 $ git commit -m "..."
 
-3/22/2018 Merge: 742500b92343b2665154ea86790f8e674c632819 (v1.11.150)
-9/8/2018 Merge: 
+3/22/2018 Merge: 742500b92343b2665154ea86790f8e674c632819 v1.11.150
+9/8/2018 Merge: 5e37a27d0fed099c6fa1fb821beac9f9be722d78 v1.17.243
 
 Verbose logging
 ---------------
