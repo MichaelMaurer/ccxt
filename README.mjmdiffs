@@ -82,4 +82,4 @@ Added entry for query/deposit-withdraw.
 Huobi URLs
 ----------
 Previously: Change huobipro.com => huobi.pro
-Reverted: often saw periods (many minutes long) of all REST requests (including order placement) timing out on huobi.pro.
+Reverted: Back to huobipro.com. Often saw periods (many minutes long) of all REST requests (including order placement) timing out on huobi.pro.
