@@ -12,20 +12,25 @@ module.exports = class gemini extends Exchange {
         return this.deepExtend (super.describe (), {
             'id': 'gemini',
             'name': 'Gemini',
-            'countries': 'US',
+            'countries': [ 'US' ],
             'rateLimit': 1500, // 200 for private API
             'version': 'v1',
             'has': {
                 'fetchDepositAddress': false,
+                'createDepositAddress': true,
                 'CORS': false,
                 'fetchBidsAsks': false,
                 'fetchTickers': false,
                 'fetchMyTrades': true,
-                'fetchOrder': false,
+                'fetchOrder': true,
                 'fetchOrders': false,
-                'fetchOpenOrders': false,
+                'fetchOpenOrders': true,
                 'fetchClosedOrders': false,
+                'createMarketOrder': false,
                 'withdraw': true,
+                'fetchTransactions': true,
+                'fetchWithdrawals': false,
+                'fetchDeposits': false,
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/27816857-ce7be644-6096-11e7-82d6-3c257263229c.jpg',
@@ -62,16 +67,19 @@ module.exports = class gemini extends Exchange {
                         'orders',
                         'mytrades',
                         'tradevolume',
+                        'transfers',
                         'balances',
                         'deposit/{currency}/newAddress',
                         'withdraw/{currency}',
                         'heartbeat',
+                        'transfers',
                     ],
                 },
             },
             'fees': {
                 'trading': {
                     'taker': 0.0025,
+                    'maker': 0.0025,
                 },
             },
         });
@@ -115,16 +123,16 @@ module.exports = class gemini extends Exchange {
         let timestamp = ticker['volume']['timestamp'];
         let baseVolume = market['base'];
         let quoteVolume = market['quote'];
-        let last = parseFloat (ticker['last']);
+        let last = this.safeFloat (ticker, 'last');
         return {
             'symbol': symbol,
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
             'high': undefined,
             'low': undefined,
-            'bid': parseFloat (ticker['bid']),
+            'bid': this.safeFloat (ticker, 'bid'),
             'bidVolume': undefined,
-            'ask': parseFloat (ticker['ask']),
+            'ask': this.safeFloat (ticker, 'ask'),
             'askVolume': undefined,
             'vwap': undefined,
             'open': undefined,
@@ -154,12 +162,12 @@ module.exports = class gemini extends Exchange {
                 currency = this.commonCurrencyCode (currency);
             }
             fee = {
-                'cost': parseFloat (trade['fee_amount']),
+                'cost': this.safeFloat (trade, 'fee_amount'),
                 'currency': currency,
             };
         }
-        let price = parseFloat (trade['price']);
-        let amount = parseFloat (trade['amount']);
+        let price = this.safeFloat (trade, 'price');
+        let amount = this.safeFloat (trade, 'amount');
         return {
             'id': trade['tid'].toString (),
             'order': order,
@@ -168,7 +176,7 @@ module.exports = class gemini extends Exchange {
             'datetime': this.iso8601 (timestamp),
             'symbol': market['symbol'],
             'type': undefined,
-            'side': trade['type'],
+            'side': trade['type'].toLowerCase (),
             'price': price,
             'cost': price * amount,
             'amount': amount,
@@ -201,6 +209,87 @@ module.exports = class gemini extends Exchange {
             result[currency] = account;
         }
         return this.parseBalance (result);
+    }
+
+    parseOrder (order, market = undefined) {
+        let timestamp = order['timestampms'];
+        let amount = this.safeFloat (order, 'original_amount');
+        let remaining = this.safeFloat (order, 'remaining_amount');
+        let filled = this.safeFloat (order, 'executed_amount');
+        let status = 'closed';
+        if (order['is_live']) {
+            status = 'open';
+        }
+        if (order['is_cancelled']) {
+            status = 'canceled';
+        }
+        let price = this.safeFloat (order, 'price');
+        let average = this.safeFloat (order, 'avg_execution_price');
+        if (average !== 0.0) {
+            price = average; // prefer filling (execution) price over the submitted price
+        }
+        let cost = undefined;
+        if (typeof filled !== 'undefined') {
+            if (typeof average !== 'undefined') {
+                cost = filled * average;
+            }
+        }
+        let type = this.safeString (order, 'type');
+        if (type === 'exchange limit') {
+            type = 'limit';
+        } else if (type === 'market buy' || type === 'market sell') {
+            type = 'market';
+        } else {
+            type = order['type'];
+        }
+        let fee = undefined;
+        let symbol = undefined;
+        if (typeof market === 'undefined') {
+            let marketId = this.safeString (order, 'symbol');
+            if (marketId in this.markets_by_id) {
+                market = this.markets_by_id[marketId];
+            }
+        }
+        if (typeof market !== 'undefined') {
+            symbol = market['symbol'];
+        }
+        return {
+            'id': order['order_id'],
+            'info': order,
+            'timestamp': timestamp,
+            'datetime': this.iso8601 (timestamp),
+            'lastTradeTimestamp': undefined,
+            'status': status,
+            'symbol': symbol,
+            'type': type,
+            'side': order['side'].toLowerCase (),
+            'price': price,
+            'average': average,
+            'cost': cost,
+            'amount': amount,
+            'filled': filled,
+            'remaining': remaining,
+            'fee': fee,
+        };
+    }
+
+    async fetchOrder (id, symbol = undefined, params = {}) {
+        await this.loadMarkets ();
+        let response = await this.privatePostOrderStatus (this.extend ({
+            'order_id': id,
+        }, params));
+        return this.parseOrder (response);
+    }
+
+    async fetchOpenOrders (symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        await this.loadMarkets ();
+        let response = await this.privatePostOrders (params);
+        let orders = this.parseOrders (response, undefined, since, limit);
+        if (typeof symbol !== 'undefined') {
+            let market = this.market (symbol); // throws on non-existent symbol
+            orders = this.filterBySymbol (orders, market['symbol']);
+        }
+        return orders;
     }
 
     async createOrder (symbol, type, side, amount, price = undefined, params = {}) {
@@ -237,7 +326,9 @@ module.exports = class gemini extends Exchange {
             'symbol': market['id'],
         };
         if (typeof limit !== 'undefined')
-            request['limit'] = limit;
+            request['limit_trades'] = limit;
+        if (typeof since !== 'undefined')
+            request['timestamp'] = parseInt (since / 1000);
         let response = await this.privatePostMytrades (this.extend (request, params));
         return this.parseTrades (response, market, since, limit);
     }
@@ -254,6 +345,59 @@ module.exports = class gemini extends Exchange {
         return {
             'info': response,
             'id': this.safeString (response, 'txHash'),
+        };
+    }
+
+    nonce () {
+        return this.milliseconds ();
+    }
+
+    async fetchTransactions (code = undefined, since = undefined, limit = undefined, params = {}) {
+        await this.loadMarkets ();
+        let request = {};
+        let response = await this.privatePostTransfers (this.extend (request, params));
+        return this.parseTransactions (response);
+    }
+
+    parseTransaction (transaction, currency = undefined) {
+        let timestamp = this.safeInteger (transaction, 'timestampms');
+        let datetime = undefined;
+        if (typeof timestamp !== 'undefined')
+            datetime = this.iso8601 (timestamp);
+        let code = undefined;
+        if (typeof currency === 'undefined') {
+            let currencyId = this.safeString (transaction, 'currency');
+            if (currencyId in this.currencies_by_id) {
+                currency = this.currencies_by_id[currencyId];
+            }
+        }
+        if (typeof currency !== 'undefined') {
+            code = currency['code'];
+        }
+        let type = this.safeString (transaction, 'type');
+        if (typeof type !== 'undefined') {
+            type = type.toLowerCase ();
+        }
+        let status = 'pending';
+        // When deposits show as Advanced or Complete they are available for trading.
+        if (transaction['status'])
+            status = 'ok';
+        return {
+            'info': transaction,
+            'id': this.safeString (transaction, 'eid'),
+            'txid': this.safeString (transaction, 'txHash'),
+            'timestamp': timestamp,
+            'datetime': datetime,
+            'address': undefined, // or is it defined?
+            'type': type, // direction of the transaction, ('deposit' | 'withdraw')
+            'amount': this.safeFloat (transaction, 'amount'),
+            'currency': code,
+            'status': status,
+            'updated': undefined,
+            'fee': {
+                'cost': undefined,
+                'rate': undefined,
+            },
         };
     }
 
@@ -290,5 +434,20 @@ module.exports = class gemini extends Exchange {
             if (response['result'] === 'error')
                 throw new ExchangeError (this.id + ' ' + this.json (response));
         return response;
+    }
+
+    async createDepositAddress (code, params = {}) {
+        await this.loadMarkets ();
+        let currency = this.currency (code);
+        let response = await this.privatePostDepositCurrencyNewAddress (this.extend ({
+            'currency': currency['id'],
+        }, params));
+        let address = this.safeString (response, 'address');
+        this.checkAddress (address);
+        return {
+            'currency': code,
+            'address': address,
+            'info': response,
+        };
     }
 };

@@ -12,11 +12,15 @@ module.exports = class btcbox extends Exchange {
         return this.deepExtend (super.describe (), {
             'id': 'btcbox',
             'name': 'BtcBox',
-            'countries': 'JP',
+            'countries': [ 'JP' ],
             'rateLimit': 1000,
             'version': 'v1',
             'has': {
                 'CORS': false,
+                'fetchOrder': true,
+                'fetchOrders': true,
+                'fetchOpenOrders': true,
+                'fetchTickers': false,
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/31275803-4df755a8-aaa1-11e7-9abb-11ec2fad9f2d.jpg',
@@ -30,7 +34,6 @@ module.exports = class btcbox extends Exchange {
                         'depth',
                         'orders',
                         'ticker',
-                        'allticker',
                     ],
                 },
                 'private': {
@@ -45,17 +48,21 @@ module.exports = class btcbox extends Exchange {
                 },
             },
             'markets': {
-                'BTC/JPY': { 'id': 'BTC/JPY', 'symbol': 'BTC/JPY', 'base': 'BTC', 'quote': 'JPY' },
+                'BTC/JPY': { 'id': 'BTC/JPY', 'symbol': 'BTC/JPY', 'base': 'BTC', 'quote': 'JPY', 'baseId': 'btc', 'quoteId': 'jpy' },
+                'ETH/JPY': { 'id': 'ETH/JPY', 'symbol': 'ETH/JPY', 'base': 'ETH', 'quote': 'JPY', 'baseId': 'eth', 'quoteId': 'jpy' },
+                'LTC/JPY': { 'id': 'LTC/JPY', 'symbol': 'LTC/JPY', 'base': 'LTC', 'quote': 'JPY', 'baseId': 'ltc', 'quoteId': 'jpy' },
+                'BCH/JPY': { 'id': 'BCH/JPY', 'symbol': 'BCH/JPY', 'base': 'BCH', 'quote': 'JPY', 'baseId': 'bch', 'quoteId': 'jpy' },
             },
             'exceptions': {
                 '104': AuthenticationError,
                 '105': PermissionDenied,
                 '106': InvalidNonce,
-                '107': InvalidOrder,
+                '107': InvalidOrder, // price should be an integer
                 '200': InsufficientFunds,
-                '201': InvalidOrder,
-                '202': InvalidOrder,
+                '201': InvalidOrder, // amount too small
+                '202': InvalidOrder, // price should be [0 : 1000000]
                 '203': OrderNotFound,
+                '401': OrderNotFound, // cancel canceled, closed or non-existent order
                 '402': DDoSProtection,
             },
         });
@@ -90,11 +97,9 @@ module.exports = class btcbox extends Exchange {
         let request = {};
         let numSymbols = this.symbols.length;
         if (numSymbols > 1)
-            request['coin'] = market['id'];
+            request['coin'] = market['baseId'];
         let orderbook = await this.publicGetDepth (this.extend (request, params));
-        let result = this.parseOrderBook (orderbook);
-        result['asks'] = this.sortBy (result['asks'], 0);
-        return result;
+        return this.parseOrderBook (orderbook);
     }
 
     parseTicker (ticker, market = undefined) {
@@ -127,34 +132,19 @@ module.exports = class btcbox extends Exchange {
         };
     }
 
-    async fetchTickers (symbols = undefined, params = {}) {
-        await this.loadMarkets ();
-        let tickers = await this.publicGetAllticker (params);
-        let ids = Object.keys (tickers);
-        let result = {};
-        for (let i = 0; i < ids.length; i++) {
-            let id = ids[i];
-            let market = this.markets_by_id[id];
-            let symbol = market['symbol'];
-            let ticker = tickers[id];
-            result[symbol] = this.parseTicker (ticker, market);
-        }
-        return result;
-    }
-
     async fetchTicker (symbol, params = {}) {
         await this.loadMarkets ();
         let market = this.market (symbol);
         let request = {};
         let numSymbols = this.symbols.length;
         if (numSymbols > 1)
-            request['coin'] = market['id'];
+            request['coin'] = market['baseId'];
         let ticker = await this.publicGetTicker (this.extend (request, params));
         return this.parseTicker (ticker, market);
     }
 
     parseTrade (trade, market) {
-        let timestamp = parseInt (trade['date']) * 1000;
+        let timestamp = parseInt (trade['date']) * 1000; // GMT time
         return {
             'info': trade,
             'id': trade['tid'],
@@ -175,7 +165,7 @@ module.exports = class btcbox extends Exchange {
         let request = {};
         let numSymbols = this.symbols.length;
         if (numSymbols > 1)
-            request['coin'] = market['id'];
+            request['coin'] = market['baseId'];
         let response = await this.publicGetOrders (this.extend (request, params));
         return this.parseTrades (response, market, since, limit);
     }
@@ -190,7 +180,7 @@ module.exports = class btcbox extends Exchange {
         };
         let numSymbols = this.symbols.length;
         if (numSymbols > 1)
-            request['coin'] = market['id'];
+            request['coin'] = market['baseId'];
         let response = await this.privatePostTradeAdd (this.extend (request, params));
         return {
             'info': response,
@@ -208,7 +198,7 @@ module.exports = class btcbox extends Exchange {
     parseOrder (order) {
         // {"id":11,"datetime":"2014-10-21 10:47:20","type":"sell","price":42000,"amount_original":1.2,"amount_outstanding":1.2,"status":"closed","trades":[]}
         const id = this.safeString (order, 'id');
-        const timestamp = this.parse8601 (order['datetime']);
+        const timestamp = this.parse8601 (order['datetime'] + '+09:00'); // Tokyo time
         const amount = this.safeFloat (order, 'amount_original');
         const remaining = this.safeFloat (order, 'amount_outstanding');
         let filled = undefined;
@@ -220,26 +210,34 @@ module.exports = class btcbox extends Exchange {
         if (typeof price !== 'undefined')
             if (typeof filled !== 'undefined')
                 cost = filled * price;
+        // status is set by fetchOrder method only
         const statuses = {
             // TODO: complete list
-            'closed': 'closed',
+            'part': 'open', // partially or not at all executed
+            'all': 'closed', // fully executed
             'cancelled': 'canceled',
+            'closed': 'closed', // never encountered, seems to be bug in the doc
         };
         let status = undefined;
         if (order['status'] in statuses)
             status = statuses[order['status']];
+        // fetchOrders do not return status, use heuristic
+        if (typeof status === 'undefined')
+            if (typeof remaining !== 'undefined' && remaining === 0)
+                status = 'closed';
         let trades = undefined; // todo: this.parseTrades (order['trades']);
         return {
             'id': id,
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
+            'lastTradeTimestamp': undefined,
             'amount': amount,
             'remaining': remaining,
             'filled': filled,
             'side': order['type'],
             'type': undefined,
             'status': status,
-            'symbol': undefined,
+            'symbol': 'BTC/JPY',
             'price': price,
             'cost': cost,
             'trades': trades,
@@ -261,6 +259,7 @@ module.exports = class btcbox extends Exchange {
         let response = await this.privatePostTradeList (this.extend ({
             'type': 'all', // 'open' or 'all'
         }, params));
+        // status (open/closed/canceled) is undefined
         return this.parseOrders (response);
     }
 
@@ -269,7 +268,17 @@ module.exports = class btcbox extends Exchange {
         let response = await this.privatePostTradeList (this.extend ({
             'type': 'open', // 'open' or 'all'
         }, params));
-        return this.parseOrders (response);
+        const orders = this.parseOrders (response);
+        // btcbox does not return status, but we know it's 'open' as we queried for open orders
+        for (let i = 0; i < orders.length; i++) {
+            const order = orders[i];
+            order['status'] = 'open';
+        }
+        return orders;
+    }
+
+    nonce () {
+        return this.milliseconds ();
     }
 
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {

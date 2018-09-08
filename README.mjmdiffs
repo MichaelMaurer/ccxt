@@ -24,8 +24,8 @@ $ git merge master
 * Show differences from <master>: git diff master
 $ git commit -m "..."
 
-Latest merge: 742500b92343b2665154ea86790f8e674c632819 (v1.11.150) 3/22/2018
-
+3/22/2018 Merge: 742500b92343b2665154ea86790f8e674c632819 (v1.11.150)
+9/8/2018 Merge: 
 
 Verbose logging
 ---------------
@@ -39,6 +39,7 @@ js/bitfinex.js sign()
 
 Nonce
 -----
+In base/Exchange.js
 origin: uses second() or millisecond(), no guarantee of uniqueness/monotonicity
 patch: use millisecond() but increment until > previous
 
@@ -60,6 +61,7 @@ patch: edit liqui.js handleErrors() to tolerate
 Binance URLS
 ------------
 Change from www.binance.com to us.binance.com everywhere.
+9/8/2018: Reverted as test, no longer any diff.
 
 Binance fetchTickers()
 ----------------------
@@ -80,8 +82,10 @@ Added parseMyTrade() for fetchMyTrades().
 Huobi api config
 ----------------
 Added entry for query/deposit-withdraw.
+9/8/2018: Now master has this, no longer any diff.
 
 Huobi URLs
 ----------
 Previously: Change huobipro.com => huobi.pro
 Reverted: Back to huobipro.com. Often saw periods (many minutes long) of all REST requests (including order placement) timing out on huobi.pro.
+9/8/2018: Now master has huobi.pro, no longer any diff.

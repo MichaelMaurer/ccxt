@@ -12,23 +12,27 @@ module.exports = class bitfinex2 extends bitfinex {
         return this.deepExtend (super.describe (), {
             'id': 'bitfinex2',
             'name': 'Bitfinex v2',
-            'countries': 'VG',
+            'countries': [ 'VG' ],
             'version': 'v2',
+            'certified': false,
             // new metainfo interface
             'has': {
                 'CORS': true,
-                'createOrder': false,
-                'createMarketOrder': false,
                 'createLimitOrder': false,
+                'createMarketOrder': false,
+                'createOrder': false,
+                'deposit': false,
                 'editOrder': false,
+                'fetchDepositAddress': false,
+                'fetchClosedOrders': false,
+                'fetchFundingFees': false,
                 'fetchMyTrades': false,
                 'fetchOHLCV': true,
-                'fetchTickers': true,
-                'fetchOrder': true,
                 'fetchOpenOrders': false,
-                'fetchClosedOrders': false,
+                'fetchOrder': true,
+                'fetchTickers': true,
+                'fetchTradingFees': false,
                 'withdraw': true,
-                'deposit': false,
             },
             'timeframes': {
                 '1m': '1m',
@@ -74,11 +78,12 @@ module.exports = class bitfinex2 extends bitfinex {
                         'book/{symbol}/P2',
                         'book/{symbol}/P3',
                         'book/{symbol}/R0',
-                        'stats1/{key}:{size}:{symbol}/{side}/{section}',
-                        'stats1/{key}:{size}:{symbol}/long/last',
-                        'stats1/{key}:{size}:{symbol}/long/hist',
-                        'stats1/{key}:{size}:{symbol}/short/last',
-                        'stats1/{key}:{size}:{symbol}/short/hist',
+                        'stats1/{key}:{size}:{symbol}:{side}/{section}',
+                        'stats1/{key}:{size}:{symbol}/{section}',
+                        'stats1/{key}:{size}:{symbol}:long/last',
+                        'stats1/{key}:{size}:{symbol}:long/hist',
+                        'stats1/{key}:{size}:{symbol}:short/last',
+                        'stats1/{key}:{size}:{symbol}:short/hist',
                         'candles/trade:{timeframe}:{symbol}/{section}',
                         'candles/trade:{timeframe}:{symbol}/last',
                         'candles/trade:{timeframe}:{symbol}/hist',
@@ -111,6 +116,7 @@ module.exports = class bitfinex2 extends bitfinex {
                         'auth/w/alert/set',
                         'auth/w/alert/{type}:{symbol}:{price}/del',
                         'auth/calc/order/avail',
+                        'auth/r/ledgers/{symbol}/hist',
                     ],
                 },
             },
@@ -163,9 +169,7 @@ module.exports = class bitfinex2 extends bitfinex {
     }
 
     getCurrencyId (code) {
-        let isFiat = this.isFiat (code);
-        let prefix = isFiat ? 'f' : 't';
-        return prefix + code;
+        return 'f' + code;
     }
 
     async fetchMarkets () {
@@ -188,8 +192,8 @@ module.exports = class bitfinex2 extends bitfinex {
             };
             let limits = {
                 'amount': {
-                    'min': parseFloat (market['minimum_order_size']),
-                    'max': parseFloat (market['maximum_order_size']),
+                    'min': this.safeFloat (market, 'minimum_order_size'),
+                    'max': this.safeFloat (market, 'maximum_order_size'),
                 },
                 'price': {
                     'min': Math.pow (10, -precision['price']),
@@ -210,7 +214,6 @@ module.exports = class bitfinex2 extends bitfinex {
                 'active': true,
                 'precision': precision,
                 'limits': limits,
-                'lot': Math.pow (10, -precision['amount']),
                 'info': market,
             });
         }
@@ -229,16 +232,30 @@ module.exports = class bitfinex2 extends bitfinex {
             let total = balance[2];
             let available = balance[4];
             if (accountType === balanceType) {
-                if (currency[0] === 't')
+                let code = currency;
+                if (currency in this.currencies_by_id) {
+                    code = this.currencies_by_id[currency]['code'];
+                } else if (currency[0] === 't') {
                     currency = currency.slice (1);
-                let uppercase = currency.toUpperCase ();
-                uppercase = this.commonCurrencyCode (uppercase);
+                    code = currency.toUpperCase ();
+                    code = this.commonCurrencyCode (code);
+                } else {
+                    code = this.commonCurrencyCode (code);
+                }
                 let account = this.account ();
-                account['free'] = available;
                 account['total'] = total;
-                if (account['free'])
+                if (!available) {
+                    if (available === 0) {
+                        account['free'] = 0;
+                        account['used'] = total;
+                    } else {
+                        account['free'] = total;
+                    }
+                } else {
+                    account['free'] = available;
                     account['used'] = account['total'] - account['free'];
-                result[uppercase] = account;
+                }
+                result[code] = account;
             }
         }
         return this.parseBalance (result);
@@ -256,6 +273,7 @@ module.exports = class bitfinex2 extends bitfinex {
             'asks': [],
             'timestamp': timestamp,
             'datetime': this.iso8601 (timestamp),
+            'nonce': undefined,
         };
         for (let i = 0; i < orderbook.length; i++) {
             let order = orderbook[i];
@@ -293,7 +311,7 @@ module.exports = class bitfinex2 extends bitfinex {
             'last': last,
             'previousClose': undefined,
             'change': ticker[length - 6],
-            'percentage': ticker[length - 5],
+            'percentage': ticker[length - 5] * 100,
             'average': undefined,
             'baseVolume': ticker[length - 3],
             'quoteVolume': undefined,
@@ -348,13 +366,16 @@ module.exports = class bitfinex2 extends bitfinex {
     async fetchTrades (symbol, since = undefined, limit = 120, params = {}) {
         await this.loadMarkets ();
         let market = this.market (symbol);
+        let sort = '-1';
         let request = {
             'symbol': market['id'],
-            'sort': 1,
             'limit': limit, // default = max = 120
         };
-        if (typeof since !== 'undefined')
+        if (typeof since !== 'undefined') {
             request['start'] = since;
+            sort = '1';
+        }
+        request['sort'] = sort;
         let response = await this.publicGetTradesSymbolHist (this.extend (request, params));
         let trades = this.sortBy (response, 1);
         return this.parseTrades (trades, market, undefined, limit);
@@ -363,16 +384,20 @@ module.exports = class bitfinex2 extends bitfinex {
     async fetchOHLCV (symbol, timeframe = '1m', since = undefined, limit = 100, params = {}) {
         await this.loadMarkets ();
         let market = this.market (symbol);
+        if (typeof limit === 'undefined') {
+            limit = 100;
+        }
+        if (typeof since === 'undefined') {
+            since = this.milliseconds () - this.parseTimeframe (timeframe) * limit * 1000;
+        }
         let request = {
             'symbol': market['id'],
             'timeframe': this.timeframes[timeframe],
             'sort': 1,
             'limit': limit,
+            'start': since,
         };
-        if (typeof since !== 'undefined')
-            request['start'] = since;
-        request = this.extend (request, params);
-        let response = await this.publicGetCandlesTradeTimeframeSymbolHist (request);
+        let response = await this.publicGetCandlesTradeTimeframeSymbolHist (this.extend (request, params));
         return this.parseOHLCVs (response, market, timeframe, since, limit);
     }
 
@@ -386,6 +411,10 @@ module.exports = class bitfinex2 extends bitfinex {
 
     async fetchOrder (id, symbol = undefined, params = {}) {
         throw new NotSupported (this.id + ' fetchOrder not implemented yet');
+    }
+
+    async fetchDepositAddress (currency, params = {}) {
+        throw new NotSupported (this.id + ' fetchDepositAddress() not implemented yet.');
     }
 
     async withdraw (currency, amount, address, tag = undefined, params = {}) {

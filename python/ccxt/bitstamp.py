@@ -14,8 +14,9 @@ except NameError:
 import math
 import json
 from ccxt.base.errors import ExchangeError
-from ccxt.base.errors import NotSupported
 from ccxt.base.errors import AuthenticationError
+from ccxt.base.errors import PermissionDenied
+from ccxt.base.errors import NotSupported
 
 
 class bitstamp (Exchange):
@@ -24,13 +25,13 @@ class bitstamp (Exchange):
         return self.deep_extend(super(bitstamp, self).describe(), {
             'id': 'bitstamp',
             'name': 'Bitstamp',
-            'countries': 'GB',
+            'countries': ['GB'],
             'rateLimit': 1000,
             'version': 'v2',
             'has': {
                 'CORS': True,
                 'fetchDepositAddress': True,
-                'fetchOrder': True,
+                'fetchOrder': 'emulated',
                 'fetchOpenOrders': True,
                 'fetchMyTrades': True,
                 'withdraw': True,
@@ -154,6 +155,9 @@ class bitstamp (Exchange):
                     },
                 },
             },
+            'exceptions': {
+                'No permission found': PermissionDenied,
+            },
         })
 
     def fetch_markets(self):
@@ -175,7 +179,6 @@ class bitstamp (Exchange):
             cost = parts[0]
             # cost, currency = market['minimum_order'].split(' ')
             active = (market['trading'] == 'Enabled')
-            lot = math.pow(10, -precision['amount'])
             result.append({
                 'id': id,
                 'symbol': symbol,
@@ -185,12 +188,11 @@ class bitstamp (Exchange):
                 'quoteId': quoteId,
                 'symbolId': symbolId,
                 'info': market,
-                'lot': lot,
                 'active': active,
                 'precision': precision,
                 'limits': {
                     'amount': {
-                        'min': lot,
+                        'min': math.pow(10, -precision['amount']),
                         'max': None,
                     },
                     'price': {
@@ -219,22 +221,22 @@ class bitstamp (Exchange):
             'pair': self.market_id(symbol),
         }, params))
         timestamp = int(ticker['timestamp']) * 1000
-        vwap = float(ticker['vwap'])
-        baseVolume = float(ticker['volume'])
+        vwap = self.safe_float(ticker, 'vwap')
+        baseVolume = self.safe_float(ticker, 'volume')
         quoteVolume = baseVolume * vwap
-        last = float(ticker['last'])
+        last = self.safe_float(ticker, 'last')
         return {
             'symbol': symbol,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'high': float(ticker['high']),
-            'low': float(ticker['low']),
-            'bid': float(ticker['bid']),
+            'high': self.safe_float(ticker, 'high'),
+            'low': self.safe_float(ticker, 'low'),
+            'bid': self.safe_float(ticker, 'bid'),
             'bidVolume': None,
-            'ask': float(ticker['ask']),
+            'ask': self.safe_float(ticker, 'ask'),
             'askVolume': None,
             'vwap': vwap,
-            'open': float(ticker['open']),
+            'open': self.safe_float(ticker, 'open'),
             'close': last,
             'last': last,
             'previousClose': None,
@@ -373,12 +375,12 @@ class bitstamp (Exchange):
         method = 'privatePost' + self.capitalize(side)
         order = {
             'pair': self.market_id(symbol),
-            'amount': amount,
+            'amount': self.amount_to_precision(symbol, amount),
         }
         if type == 'market':
             method += 'Market'
         else:
-            order['price'] = price
+            order['price'] = self.price_to_precision(symbol, price)
         method += 'Pair'
         response = getattr(self, method)(self.extend(order, params))
         return {
@@ -419,6 +421,8 @@ class bitstamp (Exchange):
             market = self.market(symbol)
             request['pair'] = market['id']
             method += 'Pair'
+        if limit is not None:
+            request['limit'] = limit
         response = getattr(self, method)(self.extend(request, params))
         return self.parse_trades(response, market, since, limit)
 
@@ -447,14 +451,13 @@ class bitstamp (Exchange):
         cost = None
         if transactions is not None:
             if isinstance(transactions, list):
+                feeCost = 0.0
                 for i in range(0, len(transactions)):
                     trade = self.parse_trade(self.extend({
                         'order_id': id,
                         'side': side,
                     }, transactions[i]), market)
                     filled += trade['amount']
-                    if feeCost is None:
-                        feeCost = 0.0
                     feeCost += trade['fee']['cost']
                     if cost is None:
                         cost = 0.0
@@ -491,6 +494,7 @@ class bitstamp (Exchange):
             'id': id,
             'datetime': iso8601,
             'timestamp': timestamp,
+            'lastTradeTimestamp': None,
             'status': status,
             'symbol': symbol,
             'type': None,
@@ -507,8 +511,8 @@ class bitstamp (Exchange):
 
     def fetch_open_orders(self, symbol=None, since=None, limit=None, params={}):
         market = None
+        self.load_markets()
         if symbol is not None:
-            self.load_markets()
             market = self.market(symbol)
         orders = self.privatePostOpenOrdersAll()
         return self.parse_orders(orders, market, since, limit)
@@ -540,7 +544,6 @@ class bitstamp (Exchange):
         self.check_address(address)
         return {
             'currency': code,
-            'status': 'ok',
             'address': address,
             'tag': tag,
             'info': response,
@@ -603,10 +606,15 @@ class bitstamp (Exchange):
             return  # fallback to default error handler
         if (body[0] == '{') or (body[0] == '['):
             response = json.loads(body)
+            # fetchDepositAddress returns {"error": "No permission found"} on apiKeys that don't have the permission required
+            error = self.safe_string(response, 'error')
+            exceptions = self.exceptions
+            if error in exceptions:
+                raise exceptions[error](self.id + ' ' + body)
             status = self.safe_string(response, 'status')
             if status == 'error':
                 code = self.safe_string(response, 'code')
                 if code is not None:
                     if code == 'API0005':
                         raise AuthenticationError(self.id + ' invalid signature, use the uid for the main account if you have subaccounts')
-                raise ExchangeError(self.id + ' ' + self.json(response))
+                raise ExchangeError(self.id + ' ' + body)

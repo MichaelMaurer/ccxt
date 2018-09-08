@@ -3,14 +3,17 @@
 /*  ------------------------------------------------------------------------ */
 
 const [processPath, , argument = null] = process.argv.filter (x => !x.startsWith ('--'))
-const verbose = process.argv.includes ('--verbose') || false
-const strict  = process.argv.includes ('--strict')  || false
+    , verbose = process.argv.includes ('--verbose') || false
+    , strict  = process.argv.includes ('--strict')  || false
+    , compact = process.argv.includes ('--compact') || false
 
 
 /*  ------------------------------------------------------------------------ */
 
 const asTable   = require ('as-table')
     , log       = require ('ololog')
+    , path      = require ('path')
+    , fs        = require ('fs')
     , ansi      = require ('ansicolor').nice
     , ccxt      = require ('../../ccxt.js')
 
@@ -38,6 +41,15 @@ if (process.argv.length < 3) {
 
 /*  ------------------------------------------------------------------------ */
 
+const keysGlobal = path.resolve ('keys.json')
+const keysLocal = path.resolve ('keys.local.json')
+let globalKeysFile = fs.existsSync (keysGlobal) ? keysGlobal : false
+let localKeysFile = fs.existsSync (keysLocal) ? keysLocal : globalKeysFile
+
+const keys = require (localKeysFile)
+
+/*  ------------------------------------------------------------------------ */
+
 log ('\nLooking up for:', argument.bright, strict ? '(strict search)' : '(non-strict search)', '\n')
 
 const checkAgainst = strict ?
@@ -49,7 +61,7 @@ const checkAgainst = strict ?
     let exchanges = await Promise.all (ccxt.exchanges.map (async id => {
 
         // instantiate the exchange
-        let exchange = new ccxt[id] ()
+        let exchange = new ccxt[id] (localKeysFile ? (keys[id] || {}) : {}) // set up keys and settings, if any
 
         if (exchange.has.publicAPI) {
 
@@ -89,7 +101,13 @@ const checkAgainst = strict ?
             checkAgainst (market['id'].toString (), argument))
 
 
-    log (asTable (markets.map (market => ccxt.omit (market, [ 'info', 'limits', 'precision', 'tiers' ]))))
+    log (asTable (markets.map (market => {
+        market = ccxt.omit (market, [ 'info', 'limits', 'precision', 'tiers' ])
+        return (!compact) ? market : {
+            'symbol': market['symbol'],
+            'exchange': market['exchange'],
+        };
+    })))
 
     log ("\n---------------------------------------------------------------\n")
 

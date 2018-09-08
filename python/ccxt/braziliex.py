@@ -17,7 +17,7 @@ class braziliex (Exchange):
         return self.deep_extend(super(braziliex, self).describe(), {
             'id': 'braziliex',
             'name': 'Braziliex',
-            'countries': 'BR',
+            'countries': ['BR'],
             'rateLimit': 1000,
             'has': {
                 'fetchCurrencies': True,
@@ -56,6 +56,10 @@ class braziliex (Exchange):
                     ],
                 },
             },
+            'commonCurrencies': {
+                'EPC': 'Epacoin',
+                'ABC': 'Anti Bureaucracy Coin',
+            },
             'fees': {
                 'trading': {
                     'maker': 0.005,
@@ -79,11 +83,9 @@ class braziliex (Exchange):
             uppercase = id.upper()
             code = self.common_currency_code(uppercase)
             active = self.safe_integer(currency, 'active') == 1
-            status = 'ok'
             maintenance = self.safe_integer(currency, 'under_maintenance')
             if maintenance != 0:
                 active = False
-                status = 'maintenance'
             canWithdraw = self.safe_integer(currency, 'is_withdrawal_active') == 1
             canDeposit = self.safe_integer(currency, 'is_deposit_active') == 1
             if not canWithdraw or not canDeposit:
@@ -93,7 +95,6 @@ class braziliex (Exchange):
                 'code': code,
                 'name': currency['name'],
                 'active': active,
-                'status': status,
                 'precision': precision,
                 'funding': {
                     'withdraw': {
@@ -149,7 +150,6 @@ class braziliex (Exchange):
                 'amount': 8,
                 'price': 8,
             }
-            lot = math.pow(10, -precision['amount'])
             result.append({
                 'id': id,
                 'symbol': symbol.upper(),
@@ -158,11 +158,10 @@ class braziliex (Exchange):
                 'baseId': baseId,
                 'quoteId': quoteId,
                 'active': active,
-                'lot': lot,
                 'precision': precision,
                 'limits': {
                     'amount': {
-                        'min': lot,
+                        'min': math.pow(10, -precision['amount']),
                         'max': math.pow(10, precision['amount']),
                     },
                     'price': {
@@ -248,10 +247,10 @@ class braziliex (Exchange):
             timestamp = self.parse8601(trade['date_exec'])
         else:
             timestamp = self.parse8601(trade['date'])
-        price = float(trade['price'])
-        amount = float(trade['amount'])
+        price = self.safe_float(trade, 'price')
+        amount = self.safe_float(trade, 'amount')
         symbol = market['symbol']
-        cost = float(trade['total'])
+        cost = self.safe_float(trade, 'total')
         orderId = self.safe_string(trade, 'order_number')
         return {
             'timestamp': timestamp,
@@ -296,7 +295,7 @@ class braziliex (Exchange):
 
     def parse_order(self, order, market=None):
         symbol = None
-        if not market:
+        if market is None:
             marketId = self.safe_string(order, 'market')
             if marketId:
                 if marketId in self.markets_by_id:
@@ -306,7 +305,7 @@ class braziliex (Exchange):
         timestamp = self.safe_value(order, 'timestamp')
         if not timestamp:
             timestamp = self.parse8601(order['date'])
-        price = float(order['price'])
+        price = self.safe_float(order, 'price')
         cost = self.safe_float(order, 'total', 0.0)
         amount = self.safe_float(order, 'amount')
         filledPercentage = self.safe_float(order, 'progress')
@@ -319,6 +318,7 @@ class braziliex (Exchange):
             'id': order['order_number'],
             'datetime': self.iso8601(timestamp),
             'timestamp': timestamp,
+            'lastTradeTimestamp': None,
             'status': 'open',
             'symbol': symbol,
             'type': 'limit',
@@ -407,7 +407,6 @@ class braziliex (Exchange):
             'currency': code,
             'address': address,
             'tag': tag,
-            'status': 'ok',
             'info': response,
         }
 
