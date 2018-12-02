@@ -116,7 +116,7 @@ module.exports = class bibox extends Exchange {
             let base = this.commonCurrencyCode (baseId);
             let quote = this.commonCurrencyCode (quoteId);
             let symbol = base + '/' + quote;
-            let id = base + '_' + quote;
+            let id = baseId + '_' + quoteId; // MJM
             let precision = {
                 'amount': 4,
                 'price': 8,
@@ -126,8 +126,8 @@ module.exports = class bibox extends Exchange {
                 'symbol': symbol,
                 'base': base,
                 'quote': quote,
-                'baseId': base,
-                'quoteId': quote,
+                'baseId': baseId, // MJM
+                'quoteId': quoteId, // MJM
                 'active': true,
                 'info': market,
                 'precision': precision,
@@ -248,7 +248,7 @@ module.exports = class bibox extends Exchange {
         let info = trade
         let timestamp = trade.createdAt
         let datetime = this.iso8601(timestamp)
-        let pair = trade.coin_symbol + '/' + trade.currency_symbol
+        let pair = this.commonCurrencyCode (trade.coin_symbol) + '/' + this.commonCurrencyCode (trade.currency_symbol) // MJM
         let symbol = this.markets[pair].symbol
         let type = 'limit'
         let side = trade.side === 1 ? 'buy' : 'sell'

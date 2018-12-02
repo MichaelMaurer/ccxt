@@ -89,6 +89,7 @@ module.exports = class poloniex extends Exchange {
                         'returnOpenLoanOffers',
                         'returnOpenOrders',
                         'returnOrderTrades',
+                        'returnOrderStatus', // MJM
                         'returnTradableBalances',
                         'returnTradeHistory',
                         'sell',

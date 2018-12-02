@@ -78,6 +78,8 @@ Easiest solution: do not filter.
 Bibox fetchMyTrades()
 ---------------------
 Added parseMyTrade() for fetchMyTrades().
+Fix baseid and quoteid handling (problem arose with BCHSV).
+Use this.commonCurrencyCode (problem arose with BCHSV).
 
 Huobi api config
 ----------------
@@ -89,3 +91,7 @@ Huobi URLs
 Previously: Change huobipro.com => huobi.pro
 Reverted: Back to huobipro.com. Often saw periods (many minutes long) of all REST requests (including order placement) timing out on huobi.pro.
 9/8/2018: Now master has huobi.pro, no longer any diff.
+
+Poloniex
+--------
+Add 'returnOrderStatus' endpoint to list in poloniex.js.
