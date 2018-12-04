@@ -42,6 +42,7 @@ Nonce
 In base/Exchange.js
 origin: uses second() or millisecond(), no guarantee of uniqueness/monotonicity
 patch: use millisecond() but increment until > previous
+Used for: Binance, Bitfinex, Bittrex, Poloniex.
 
 Symbol names
 ------------

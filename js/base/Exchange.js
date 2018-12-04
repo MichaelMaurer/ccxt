@@ -337,7 +337,7 @@ module.exports = class Exchange {
     }
 
     nonce () { // MJM
-        let nonce = (['binance', 'bitfinex', 'bittrex', 'yunbi'].includes(this.name.toLowerCase())) ? this.milliseconds() : this.seconds()
+        let nonce = (['binance', 'bitfinex', 'bittrex', 'poloniex', 'yunbi'].includes(this.name.toLowerCase())) ? this.milliseconds() : this.seconds()
         nonce = Math.max(nonce, this.lastNonce + 1)
         this.lastNonce = nonce
         return nonce
@@ -606,7 +606,7 @@ module.exports = class Exchange {
 
             if (this.verbose)
                 // console.log ("handleRestResponse:\n", this.id, method, url, response.status, response.statusText, "\nResponse:\n", responseHeaders, "\n", responseBody, "\n")
-                this.verboseLogger (this.id, 'Response:', method, url, response.status, response.statusText, responseBody ? '\n' + responseBody : '') // MJM
+                this.verboseLogger (this.id, 'Response:', method, url, method === 'POST' ? requestBody : '', response.status, response.statusText, responseBody ? '\n' + responseBody : '') // MJM
 
             const args = [ response.status, response.statusText, url, method, responseHeaders, responseBody, json ]
             this.handleErrors (...args)
