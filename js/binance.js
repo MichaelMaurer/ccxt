@@ -286,9 +286,10 @@ module.exports = class binance extends Exchange {
         });
     }
 
-    nonce () {
-        return this.milliseconds () - this.options['timeDifference'];
-    }
+// MJM use my own nonce() from superclass, which guarantees increasing sequence
+//    nonce () {
+//        return this.milliseconds () - this.options['timeDifference'];
+//    }
 
     async loadTimeDifference () {
         const response = await this.publicGetTime ();

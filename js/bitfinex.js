@@ -848,9 +848,10 @@ module.exports = class bitfinex extends Exchange {
         };
     }
 
-    nonce () {
-        return this.milliseconds ();
-    }
+// MJM use my own nonce() from superclass, which guarantees increasing sequence
+//    nonce () {
+//        return this.milliseconds ();
+//    }
 
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
         let request = '/' + this.implodeParams (path, params);

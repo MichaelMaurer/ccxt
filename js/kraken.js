@@ -213,7 +213,8 @@ module.exports = class kraken extends Exchange {
     }
 
     async fetchMinOrderSizes () {
-        let html = await this.zendeskGet205893708WhatIsTheMinimumOrderSize ();
+        // let html = await this.zendeskGet205893708WhatIsTheMinimumOrderSize ();
+        return {}; // MJM
         let parts = html.split ('ul>');
         let ul = parts[1];
         let listItems = ul.split ('</li');

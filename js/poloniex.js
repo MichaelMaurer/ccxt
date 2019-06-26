@@ -841,9 +841,10 @@ module.exports = class poloniex extends Exchange {
         };
     }
 
-    nonce () {
-        return this.milliseconds ();
-    }
+// MJM use my own nonce() from superclass, which guarantees increasing sequence
+//    nonce () {
+//        return this.milliseconds ();
+//    }
 
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
         let url = this.urls['api'][api];

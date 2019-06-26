@@ -42,7 +42,7 @@ Nonce
 In base/Exchange.js
 origin: uses second() or millisecond(), no guarantee of uniqueness/monotonicity
 patch: use millisecond() but increment until > previous
-Used for: Binance, Bitfinex, Bittrex, Poloniex.
+Used for: Binance, Bitfinex, Bittrex, Poloniex. Need to comment-out subclass nonce() in those cases.
 
 Symbol names
 ------------
