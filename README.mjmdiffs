@@ -53,6 +53,7 @@ origin: BCH is preferred code for Bitcoin Cash
         bittrex.js handles BCH|BCC
         liqui.js handles BCH|BCC
 patch: no changes, handle any exceptional cases outside of ccxt
+patch: bitfinex.js currencyNames used for withdraw() changed 'bcash' to 'bab'
 
 Liqui "no orders" response
 --------------------------

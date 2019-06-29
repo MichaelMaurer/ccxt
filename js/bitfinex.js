@@ -306,7 +306,10 @@ module.exports = class bitfinex extends Exchange {
                     'ANT': 'ant',
                     'AVT': 'aventus', // #1811
                     'BAT': 'bat',
-                    'BCH': 'bcash', // undocumented
+                    'BCH': 'bab', // MJM fixed from 'bcash' to 'bab'
+                    'BCHABC': 'bab', // MJM added
+                    'BCHSV': 'bsv', // MJM added
+                    'BSV': 'bsv', // MJM added
                     'BCI': 'bci',
                     'BFT': 'bft',
                     'BTC': 'bitcoin',
