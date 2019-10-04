@@ -97,3 +97,7 @@ Reverted: Back to huobipro.com. Often saw periods (many minutes long) of all RES
 Poloniex
 --------
 Add 'returnOrderStatus' endpoint to list in poloniex.js.
+
+Gdax / CoinbasePro
+------------------
+In request() error detection, response may be a string or object.

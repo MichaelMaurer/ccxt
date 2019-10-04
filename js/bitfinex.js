@@ -330,6 +330,7 @@ module.exports = class bitfinex extends Exchange {
                     'GNT': 'golem',
                     'IOST': 'ios',
                     'IOTA': 'iota',
+                    'KNC': 'knc', // MJM added
                     'LRC': 'lrc',
                     'LTC': 'litecoin',
                     'LYM': 'lym',
