@@ -60,10 +60,9 @@ Liqui "no orders" response
 origin: throws error if error='no orders'
 patch: edit liqui.js handleErrors() to tolerate
 
-Binance URLS
-------------
-Change from www.binance.com to us.binance.com everywhere.
-9/8/2018: Reverted as test, no longer any diff.
+Binance API v1->v3
+------------------
+Use /v3 for default API endpoints.
 
 Binance fetchTickers()
 ----------------------
