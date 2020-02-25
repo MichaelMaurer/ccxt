@@ -1,0 +1,1 @@
+rsync -av --exclude=node_modules --exclude=.git . ct7:ccxt-wip/

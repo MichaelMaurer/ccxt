@@ -100,3 +100,7 @@ Add 'returnOrderStatus' endpoint to list in poloniex.js.
 Gdax / CoinbasePro
 ------------------
 In request() error detection, response may be a string or object.
+
+OKEx
+----
+In okcoinusd.js handleErrors(), do not treat response.error_code=0 as error.
