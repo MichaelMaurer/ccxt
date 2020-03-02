@@ -966,7 +966,7 @@ module.exports = class okcoinusd extends Exchange {
             return; // fallback to default error handler
         if (body[0] === '{') {
             let response = JSON.parse (body);
-            if ('error_code' in response && response.error_code !== 0) { // MJM
+            if ('error_code' in response && String(response.error_code) !== "0") { // MJM
                 let error = this.safeString (response, 'error_code');
                 let message = this.id + ' ' + this.json (response);
                 if (error in this.exceptions) {
