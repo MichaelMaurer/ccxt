@@ -26,6 +26,7 @@ $ git commit -m "..."
 
 3/22/2018 Merge: 742500b92343b2665154ea86790f8e674c632819 v1.11.150
 9/8/2018 Merge: 5e37a27d0fed099c6fa1fb821beac9f9be722d78 v1.17.243
+3/27/2020 Merge: 
 
 Verbose logging
 ---------------
@@ -55,14 +56,9 @@ origin: BCH is preferred code for Bitcoin Cash
 patch: no changes, handle any exceptional cases outside of ccxt
 patch: bitfinex.js currencyNames used for withdraw() changed 'bcash' to 'bab'
 
-Liqui "no orders" response
---------------------------
-origin: throws error if error='no orders'
-patch: edit liqui.js handleErrors() to tolerate
-
-Binance API v1->v3
-------------------
-Use /v3 for default API endpoints.
+Bitfinex
+--------
+Added missing currencyName values like BCH, KNC, ...
 
 Binance fetchTickers()
 ----------------------
@@ -79,28 +75,7 @@ Easiest solution: do not filter.
 Bibox fetchMyTrades()
 ---------------------
 Added parseMyTrade() for fetchMyTrades().
-Fix baseid and quoteid handling (problem arose with BCHSV).
-Use this.commonCurrencyCode (problem arose with BCHSV).
-
-Huobi api config
-----------------
-Added entry for query/deposit-withdraw.
-9/8/2018: Now master has this, no longer any diff.
-
-Huobi URLs
-----------
-Previously: Change huobipro.com => huobi.pro
-Reverted: Back to huobipro.com. Often saw periods (many minutes long) of all REST requests (including order placement) timing out on huobi.pro.
-9/8/2018: Now master has huobi.pro, no longer any diff.
-
-Poloniex
---------
-Add 'returnOrderStatus' endpoint to list in poloniex.js.
-
-Gdax / CoinbasePro
-------------------
-In request() error detection, response may be a string or object.
 
 OKEx
 ----
-In okcoinusd.js handleErrors(), do not treat response.error_code=0 as error.
+[obsolete, if still wanted add to okex.js] In okcoinusd.js handleErrors(), do not treat response.error_code=0 as error.

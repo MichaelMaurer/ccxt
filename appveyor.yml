@@ -1,19 +1,21 @@
 environment:
   matrix:
-    - nodejs_version: '8'
+    - nodejs_version: '9'
 install:
   - ps: Install-Product node $env:nodejs_version
   - set CI=true
   - npm install --global npm@latest
   - set PATH=%APPDATA%\npm;%PATH%
   - npm install
+  - python -m pip install --upgrade pip setuptools
+  - pip install enum34==0.9
   - pip install tox
   - pip install requests
-  - cinst -y curl
+  - pip install cryptography
   - SET PATH=C:\Program Files\curl;%PATH%
   - ps: Set-Service wuauserv -StartupType Manual
   - cinst -y php --allow-empty-checksums
-  - cd c:\tools\php72
+  - cd c:\tools\php74
   - copy php.ini-production php.ini
   - echo date.timezone="UTC" >> php.ini
   - echo extension_dir=ext >> php.ini
@@ -23,14 +25,15 @@ install:
 matrix:
   fast_finish: true
 build: off
-shallow_clone: true
+# shallow_clone: true
 before_test:
-  - cinst pandoc
+  - cinst pandoc --version 2.3.1
   - pandoc -v
 test_script:
   - refreshenv
   - node --version
   - npm --version
+  - python --version
   - npm run build
   - npm run test-base
 cache:

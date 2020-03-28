@@ -9,14 +9,11 @@ const debug = process.argv.includes ('--debug') || false
 /*  ------------------------------------------------------------------------ */
 
 const asTable   = require ('as-table')
-    , util      = require ('util')
     , log       = require ('ololog')
     , ansi      = require ('ansicolor').nice
     , fs        = require ('fs')
     , ccxt      = require ('../../ccxt.js')
-    , countries = require ('../../countries.js')
     , chai      = require ('chai')
-    , expect    = chai.expect
     , assert    = chai.assert
 
 /*  ------------------------------------------------------------------------ */
@@ -36,15 +33,21 @@ log.bright ('\nTESTING', { exchange: exchangeId, symbol: exchangeSymbol || 'all'
 
 let proxies = [
     '',
-    'https://cors-anywhere.herokuapp.com/',
-    // 'https://crossorigin.me/',
+    'https://cors-anywhere.herokuapp.com/'
 ]
 
-/*  ------------------------------------------------------------------------ */
+//-----------------------------------------------------------------------------
 
 const enableRateLimit = true
 
+const { Agent } = require ('https')
+
+const agent = new Agent ({
+    ecdhCurve: 'auto',
+})
+
 const exchange = new (ccxt)[exchangeId] ({
+    agent,
     verbose,
     enableRateLimit,
     debug,
@@ -76,21 +79,23 @@ Object.keys (errors)
 const keysGlobal = 'keys.json'
 const keysLocal = 'keys.local.json'
 
-let keysFile = fs.existsSync (keysLocal) ? keysLocal : keysGlobal
+const keysFile = fs.existsSync (keysLocal) ? keysLocal : keysGlobal
 // eslint-disable-next-line import/no-dynamic-require
-let settings = require ('../../' + keysFile)[exchangeId]
+const settings = require (__dirname + '/../../' + keysFile)[exchangeId]
+
+if (settings) {
+    for (const key in settings) {
+        if (settings[key]) {
+            settings[key] = ccxt.deepExtend (exchange[key] || {}, settings[key])
+        }
+    }
+}
 
 Object.assign (exchange, settings)
 
 if (settings && settings.skip) {
     log.error.bright ('[Skipped]', { exchange: exchangeId, symbol: exchangeSymbol || 'all' })
     process.exit ()
-}
-
-//-----------------------------------------------------------------------------
-
-let countryName = function (code) {
-    return ((typeof countries[code] !== 'undefined') ? countries[code] : code)
 }
 
 //-----------------------------------------------------------------------------
@@ -114,7 +119,7 @@ let testSymbol = async (exchange, symbol) => {
 
     } else if (exchange.id === 'coinbase') {
 
-        // do nothing for now
+        // nothing for now
 
     } else {
 
@@ -139,6 +144,7 @@ let loadExchange = async exchange => {
     let symbols = [
         'BTC/CNY',
         'BTC/USD',
+        'BTC/USDT',
         'BTC/EUR',
         'BTC/ETH',
         'ETH/BTC',
@@ -172,12 +178,51 @@ let loadExchange = async exchange => {
 
 let testExchange = async exchange => {
 
+    const codes = [
+        'BTC',
+        'ETH',
+        'XRP',
+        'LTC',
+        'BCH',
+        'EOS',
+        'BNB',
+        'BSV',
+        'USDT',
+        'ATOM',
+        'BAT',
+        'BTG',
+        'DASH',
+        'DOGE',
+        'ETC',
+        'IOTA',
+        'LSK',
+        'MKR',
+        'NEO',
+        'PAX',
+        'QTUM',
+        'TRX',
+        'TUSD',
+        'USD',
+        'USDC',
+        'WAVES',
+        'XEM',
+        'XMR',
+        'ZEC',
+        'ZRX',
+    ]
+    let code = codes[0]
+    for (let c in codes) {
+        if (c in exchange.currencies) {
+            code = c
+        }
+    }
+
     await loadExchange (exchange)
 
-    let delay = exchange.rateLimit
     let symbol = exchange.symbols[0]
-    let symbols = [
+    const symbols = [
         'BTC/USD',
+        'BTC/USDT',
         'BTC/CNY',
         'BTC/EUR',
         'BTC/ETH',
@@ -187,7 +232,8 @@ let testExchange = async exchange => {
         'ZRX/WETH',
     ]
     for (let s in symbols) {
-        if (exchange.symbols.includes (symbols[s])) {
+        if (exchange.symbols.includes (symbols[s]) &&
+            (('active' in exchange.markets[symbols[s]]) ? exchange.markets[symbols[s]]['active'] : true)) {
             symbol = symbols[s]
             break
         }
@@ -205,24 +251,34 @@ let testExchange = async exchange => {
         await testSymbol (exchange, symbol)
     }
 
-    if (!exchange.apiKey || (exchange.apiKey.length < 1))
+    if (!exchange.privateKey && (!exchange.apiKey || (exchange.apiKey.length < 1)))
         return true
 
     exchange.checkRequiredCredentials ()
 
-    // move to testnet/sandbox if possible before accessing the balance if possible
-    if (exchange.urls['test'])
-        exchange.urls['api'] = exchange.urls['test']
+    // move to testnet/sandbox if possible before accessing the balance
+    // if (exchange.urls['test'])
+    //    exchange.urls['api'] = exchange.urls['test']
 
     let balance = await tests['fetchBalance'] (exchange)
 
     await tests['fetchFundingFees']  (exchange)
     await tests['fetchTradingFees']  (exchange)
+    await tests['fetchStatus'] (exchange)
 
     await tests['fetchOrders']       (exchange, symbol)
     await tests['fetchOpenOrders']   (exchange, symbol)
     await tests['fetchClosedOrders'] (exchange, symbol)
     await tests['fetchMyTrades']     (exchange, symbol)
+
+    if ('fetchLedger' in tests) {
+        await tests['fetchLedger'] (exchange, code)
+    }
+
+    // const code = exchange.markets[symbol]['quote']
+    // await tests['fetchTransactions'] (exchange, code)
+    // await tests['fetchDeposits']     (exchange, code)
+    // await tests['fetchWithdrawals']  (exchange, code)
 
     if (exchange.extendedTest) {
 
@@ -264,35 +320,6 @@ let testExchange = async exchange => {
 
 //-----------------------------------------------------------------------------
 
-let printExchangesTable = function () {
-
-    let astable = asTable.configure ({ delimiter: ' | ' })
-
-    console.log (astable (Object.values (exchanges).map (exchange => {
-
-        let website = Array.isArray (exchange.urls.www) ?
-            exchange.urls.www[0] :
-            exchange.urls.www
-
-        let countries = Array.isArray (exchange.countries) ?
-            exchange.countries.map (countryName).join (', ') :
-            countryName (exchange.countries)
-
-        let doc = Array.isArray (exchange.urls.doc) ?
-            exchange.urls.doc[0] :
-            exchange.urls.doc
-
-        return {
-            'id':        exchange.id,
-            'name':      exchange.name,
-            'countries': countries,
-        }
-
-    })))
-}
-
-//-----------------------------------------------------------------------------
-
 let tryAllProxies = async function (exchange, proxies) {
 
     let currentProxy = 0
@@ -308,10 +335,12 @@ let tryAllProxies = async function (exchange, proxies) {
             exchange.proxy = proxies[currentProxy]
 
             // add random origin for proxies
-            if (exchange.proxy.length > 0)
+            if (exchange.proxy.length > 0) {
                 exchange.origin = exchange.uuid ()
+            }
 
             await testExchange (exchange)
+
             break
 
         } catch (e) {
@@ -341,12 +370,9 @@ let tryAllProxies = async function (exchange, proxies) {
 ;(async function test () {
 
     if (exchangeSymbol) {
-
         await loadExchange (exchange)
         await testSymbol (exchange, exchangeSymbol)
-
     } else {
-
         await tryAllProxies (exchange, proxies)
     }
 
