@@ -1,5 +1,5 @@
-Migrating to ccxt 1.11.150
-==========================
+Maintaining my local ccxt fork
+==============================
 
 Git setup
 ---------
@@ -26,7 +26,7 @@ $ git commit -m "..."
 
 3/22/2018 Merge: 742500b92343b2665154ea86790f8e674c632819 v1.11.150
 9/8/2018 Merge: 5e37a27d0fed099c6fa1fb821beac9f9be722d78 v1.17.243
-3/27/2020 Merge: 
+3/27/2020 Merge: 6b0ab8eb32b66d621bc1dcf09b744aaade11a3a1 v1.25.31
 
 Verbose logging
 ---------------
@@ -78,4 +78,4 @@ Added parseMyTrade() for fetchMyTrades().
 
 OKEx
 ----
-[obsolete, if still wanted add to okex.js] In okcoinusd.js handleErrors(), do not treat response.error_code=0 as error.
+In okex.js handleErrors(), do not treat response.error_code=0 as error.

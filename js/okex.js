@@ -3015,7 +3015,7 @@ module.exports = class okex extends Exchange {
             this.throwBroadlyMatchedException (this.exceptions['broad'], message, feedback);
         }
         this.throwExactlyMatchedException (this.exceptions['exact'], errorCode, feedback);
-        if (message !== undefined) {
+        if (message !== undefined && message !== '' && errorCode !== 0) { // MJM added message!=='' && errorCode!==0
             throw new ExchangeError (feedback); // unknown message
         }
     }
