@@ -79,3 +79,10 @@ Added parseMyTrade() for fetchMyTrades().
 OKEx
 ----
 In okex.js handleErrors(), do not treat response.error_code=0 as error.
+
+CoinbasePro CB-ACCESS-TIMESTAMP
+-------------------------------
+The API asks for timestamp in seconds UTC. The default uses nonce(). But if
+many requests are made within a 30-second window, the nonce may advance too
+fast and exceed the window max. The error received is "request timestamp
+expired". Instead, change to use Date.now() as suggested by API docs.

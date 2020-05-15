@@ -854,7 +854,7 @@ module.exports = class coinbasepro extends Exchange {
         const url = this.urls['api'][api] + request;
         if (api === 'private') {
             this.checkRequiredCredentials ();
-            const nonce = this.nonce ().toString ();
+            const accessTimestamp = Date.now() / 1000; // MJM
             let payload = '';
             if (method !== 'GET') {
                 if (Object.keys (query).length) {
@@ -862,13 +862,13 @@ module.exports = class coinbasepro extends Exchange {
                     payload = body;
                 }
             }
-            const what = nonce + method + request + payload;
+            const what = accessTimestamp + method + request + payload; // MJM
             const secret = this.base64ToBinary (this.secret);
             const signature = this.hmac (this.encode (what), secret, 'sha256', 'base64');
             headers = {
                 'CB-ACCESS-KEY': this.apiKey,
                 'CB-ACCESS-SIGN': this.decode (signature),
-                'CB-ACCESS-TIMESTAMP': nonce,
+                'CB-ACCESS-TIMESTAMP': accessTimestamp, // MJM
                 'CB-ACCESS-PASSPHRASE': this.password,
                 'Content-Type': 'application/json',
             };
