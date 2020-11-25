@@ -3,7 +3,7 @@
 //  ---------------------------------------------------------------------------
 
 const Exchange = require ('./base/Exchange');
-const { ExchangeError, AuthenticationError } = require ('./base/errors');
+const { ExchangeError, AuthenticationError, ArgumentsRequired } = require ('./base/errors');
 
 //  ---------------------------------------------------------------------------
 
@@ -16,9 +16,20 @@ module.exports = class itbit extends Exchange {
             'rateLimit': 2000,
             'version': 'v1',
             'has': {
+                'cancelOrder': true,
                 'CORS': true,
                 'createMarketOrder': false,
+                'createOrder': true,
+                'fetchBalance': true,
+                'fetchClosedOrders': true,
                 'fetchMyTrades': true,
+                'fetchOpenOrders': true,
+                'fetchOrder': true,
+                'fetchOrderBook': true,
+                'fetchOrders': true,
+                'fetchTicker': true,
+                'fetchTrades': true,
+                'fetchTransactions': true,
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/27822159-66153620-60ad-11e7-89e7-005f6d7f3de0.jpg',
@@ -67,6 +78,9 @@ module.exports = class itbit extends Exchange {
                 'ETH/USD': { 'id': 'ETHUSD', 'symbol': 'ETH/USD', 'base': 'ETH', 'quote': 'USD', 'baseId': 'ETH', 'quoteId': 'USD' },
                 'ETH/EUR': { 'id': 'ETHEUR', 'symbol': 'ETH/EUR', 'base': 'ETH', 'quote': 'EUR', 'baseId': 'ETH', 'quoteId': 'EUR' },
                 'ETH/SGD': { 'id': 'ETHSGD', 'symbol': 'ETH/SGD', 'base': 'ETH', 'quote': 'SGD', 'baseId': 'ETH', 'quoteId': 'SGD' },
+                'PAXGUSD': { 'id': 'PAXGUSD', 'symbol': 'PAXG/USD', 'base': 'PAXG', 'quote': 'USD', 'baseId': 'PAXG', 'quoteId': 'USD' },
+                'BCHUSD': { 'id': 'BCHUSD', 'symbol': 'BCH/USD', 'base': 'BCH', 'quote': 'USD', 'baseId': 'BCH', 'quoteId': 'USD' },
+                'LTCUSD': { 'id': 'LTCUSD', 'symbol': 'LTC/USD', 'base': 'LTC', 'quote': 'USD', 'baseId': 'LTC', 'quoteId': 'USD' },
             },
             'fees': {
                 'trading': {
@@ -213,6 +227,7 @@ module.exports = class itbit extends Exchange {
             'price': price,
             'amount': amount,
             'cost': cost,
+            'fee': undefined,
         };
         if (feeCost !== undefined) {
             if (rebatesApplied !== undefined) {
@@ -253,7 +268,7 @@ module.exports = class itbit extends Exchange {
         await this.loadMarkets ();
         const walletId = this.safeString (params, 'walletId');
         if (walletId === undefined) {
-            throw new ExchangeError (this.id + ' fetchMyTrades requires a walletId parameter');
+            throw new ArgumentsRequired (this.id + ' fetchMyTrades requires a walletId parameter');
         }
         const request = {
             'walletId': walletId,
@@ -524,6 +539,7 @@ module.exports = class itbit extends Exchange {
             'status': this.parseOrderStatus (this.safeString (order, 'status')),
             'symbol': symbol,
             'type': type,
+            'timeInForce': undefined,
             'side': side,
             'price': price,
             'cost': cost,
@@ -533,6 +549,7 @@ module.exports = class itbit extends Exchange {
             'remaining': remaining,
             'fee': fee,
             // 'trades': this.parseTrades (order['trades'], market),
+            'trades': undefined,
         };
     }
 
@@ -613,7 +630,7 @@ module.exports = class itbit extends Exchange {
             const binhash = this.binaryConcat (binaryUrl, hash);
             const signature = this.hmac (binhash, this.encode (this.secret), 'sha512', 'base64');
             headers = {
-                'Authorization': this.apiKey + ':' + this.decode (signature),
+                'Authorization': this.apiKey + ':' + signature,
                 'Content-Type': 'application/json',
                 'X-Auth-Timestamp': timestamp,
                 'X-Auth-Nonce': nonce,

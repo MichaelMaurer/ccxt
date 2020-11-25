@@ -11,24 +11,30 @@ use \ccxt\ExchangeError;
 class btcbox extends Exchange {
 
     public function describe() {
-        return array_replace_recursive(parent::describe (), array(
+        return $this->deep_extend(parent::describe (), array(
             'id' => 'btcbox',
             'name' => 'BtcBox',
             'countries' => array( 'JP' ),
             'rateLimit' => 1000,
             'version' => 'v1',
             'has' => array(
+                'cancelOrder' => true,
                 'CORS' => false,
-                'fetchOrder' => true,
-                'fetchOrders' => true,
+                'createOrder' => true,
+                'fetchBalance' => true,
                 'fetchOpenOrders' => true,
+                'fetchOrder' => true,
+                'fetchOrderBook' => true,
+                'fetchOrders' => true,
+                'fetchTicker' => true,
                 'fetchTickers' => false,
+                'fetchTrades' => true,
             ),
             'urls' => array(
-                'logo' => 'https://user-images.githubusercontent.com/1294454/31275803-4df755a8-aaa1-11e7-9abb-11ec2fad9f2d.jpg',
+                'logo' => 'https://user-images.githubusercontent.com/51840849/87327317-98c55400-c53c-11ea-9a11-81f7d951cc74.jpg',
                 'api' => 'https://www.btcbox.co.jp/api',
                 'www' => 'https://www.btcbox.co.jp/',
-                'doc' => 'https://www.btcbox.co.jp/help/asm',
+                'doc' => 'https://blog.btcbox.jp/en/archives/8762',
                 'fees' => 'https://support.btcbox.co.jp/hc/en-us/articles/360001235694-Fees-introduction',
             ),
             'api' => array(
@@ -301,6 +307,7 @@ class btcbox extends Exchange {
             'filled' => $filled,
             'side' => $side,
             'type' => null,
+            'timeInForce' => null,
             'status' => $status,
             'symbol' => $symbol,
             'price' => $price,
@@ -308,6 +315,7 @@ class btcbox extends Exchange {
             'trades' => $trades,
             'fee' => null,
             'info' => $order,
+            'average' => null,
         );
     }
 

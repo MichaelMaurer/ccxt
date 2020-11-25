@@ -17,9 +17,16 @@ class btctradeua(Exchange):
             'countries': ['UA'],  # Ukraine,
             'rateLimit': 3000,
             'has': {
+                'cancelOrder': True,
                 'CORS': False,
                 'createMarketOrder': False,
+                'createOrder': True,
+                'fetchBalance': True,
                 'fetchOpenOrders': True,
+                'fetchOrderBook': True,
+                'fetchTicker': True,
+                'fetchTrades': True,
+                'signIn': True,
             },
             'urls': {
                 'referral': 'https://btc-trade.com.ua/registration/22689',
@@ -296,6 +303,7 @@ class btctradeua(Exchange):
             'status': 'open',
             'symbol': symbol,
             'type': None,
+            'timeInForce': None,
             'side': self.safe_string(order, 'type'),
             'price': self.safe_float(order, 'price'),
             'amount': self.safe_float(order, 'amnt_trade'),
@@ -303,6 +311,9 @@ class btctradeua(Exchange):
             'remaining': self.safe_float(order, 'amnt_trade'),
             'trades': None,
             'info': order,
+            'cost': None,
+            'average': None,
+            'fee': None,
         }
 
     async def fetch_open_orders(self, symbol=None, since=None, limit=None, params={}):

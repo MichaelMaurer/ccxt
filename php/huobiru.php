@@ -10,7 +10,7 @@ use Exception; // a common import
 class huobiru extends huobipro {
 
     public function describe() {
-        return array_replace_recursive(parent::describe (), array(
+        return $this->deep_extend(parent::describe (), array(
             'id' => 'huobiru',
             'name' => 'Huobi Russia',
             'countries' => array( 'RU' ),
@@ -22,7 +22,6 @@ class huobiru extends huobipro {
                     'market' => 'https://{hostname}/api',
                     'public' => 'https://{hostname}/api',
                     'private' => 'https://{hostname}/api',
-                    'zendesk' => 'https://huobiglobal.zendesk.com/hc/en-us/articles',
                 ),
                 'www' => 'https://www.huobi.com.ru/ru-ru',
                 'referral' => 'https://www.huobi.com.ru/invite?invite_code=esc74',

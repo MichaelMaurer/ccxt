@@ -12,20 +12,22 @@ module.exports = class bcex extends Exchange {
         return this.deepExtend (super.describe (), {
             'id': 'bcex',
             'name': 'BCEX',
-            'countries': [ 'CN', 'CA' ],
+            'countries': [ 'CN', 'HK' ],
             'version': '1',
             'has': {
-                'fetchBalance': true,
-                'fetchMarkets': true,
-                'createOrder': true,
                 'cancelOrder': true,
+                'createOrder': true,
+                'fetchBalance': true,
+                'fetchClosedOrders': 'emulated',
+                'fetchMarkets': true,
+                'fetchMyTrades': true,
+                'fetchOpenOrders': true,
+                'fetchOrder': true,
+                'fetchOrders': true,
+                'fetchOrderBook': true,
                 'fetchTicker': true,
                 'fetchTickers': false,
                 'fetchTrades': true,
-                'fetchOrder': true,
-                'fetchOrders': true,
-                'fetchClosedOrders': 'emulated',
-                'fetchOpenOrders': true,
                 'fetchTradingLimits': true,
             },
             'urls': {
@@ -95,6 +97,10 @@ module.exports = class bcex extends Exchange {
                 '您的btc不足': InsufficientFunds, // { code: 1, msg: '您的btc不足' } - your btc is insufficient
                 '参数非法': InvalidOrder, // {'code': 1, 'msg': '参数非法'} - 'Parameter illegal'
                 '订单信息不存在': OrderNotFound, // {'code': 1, 'msg': '订单信息不存在'} - 'Order information does not exist'
+            },
+            'commonCurrencies': {
+                'UNI': 'UNI COIN',
+                'PNT': 'Penta',
             },
             'options': {
                 'limits': {
@@ -369,6 +375,7 @@ module.exports = class bcex extends Exchange {
             'cost': cost,
             'order': orderId,
             'fee': undefined,
+            'takerOrMaker': undefined,
         };
     }
 
@@ -517,6 +524,8 @@ module.exports = class bcex extends Exchange {
             'remaining': this.safeFloat (order, 'numberover'),
             'status': status,
             'fee': undefined,
+            'clientOrderId': undefined,
+            'trades': undefined,
         };
     }
 
@@ -549,6 +558,7 @@ module.exports = class bcex extends Exchange {
             'lastTradeTimestamp': undefined,
             'symbol': symbol,
             'type': type,
+            'timeInForce': undefined,
             'side': side,
             'price': price,
             'cost': cost,
@@ -558,6 +568,7 @@ module.exports = class bcex extends Exchange {
             'remaining': remaining,
             'status': status,
             'fee': fee,
+            'trades': undefined,
         };
         return result;
     }

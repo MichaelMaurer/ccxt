@@ -13,23 +13,25 @@ use \ccxt\InvalidOrder;
 class bcex extends Exchange {
 
     public function describe() {
-        return array_replace_recursive(parent::describe (), array(
+        return $this->deep_extend(parent::describe (), array(
             'id' => 'bcex',
             'name' => 'BCEX',
-            'countries' => array( 'CN', 'CA' ),
+            'countries' => array( 'CN', 'HK' ),
             'version' => '1',
             'has' => array(
-                'fetchBalance' => true,
-                'fetchMarkets' => true,
-                'createOrder' => true,
                 'cancelOrder' => true,
+                'createOrder' => true,
+                'fetchBalance' => true,
+                'fetchClosedOrders' => 'emulated',
+                'fetchMarkets' => true,
+                'fetchMyTrades' => true,
+                'fetchOpenOrders' => true,
+                'fetchOrder' => true,
+                'fetchOrders' => true,
+                'fetchOrderBook' => true,
                 'fetchTicker' => true,
                 'fetchTickers' => false,
                 'fetchTrades' => true,
-                'fetchOrder' => true,
-                'fetchOrders' => true,
-                'fetchClosedOrders' => 'emulated',
-                'fetchOpenOrders' => true,
                 'fetchTradingLimits' => true,
             ),
             'urls' => array(
@@ -99,6 +101,10 @@ class bcex extends Exchange {
                 '您的btc不足' => '\\ccxt\\InsufficientFunds', // array( code => 1, msg => '您的btc不足' ) - your btc is insufficient
                 '参数非法' => '\\ccxt\\InvalidOrder', // array('code' => 1, 'msg' => '参数非法') - 'Parameter illegal'
                 '订单信息不存在' => '\\ccxt\\OrderNotFound', // array('code' => 1, 'msg' => '订单信息不存在') - 'Order information does not exist'
+            ),
+            'commonCurrencies' => array(
+                'UNI' => 'UNI COIN',
+                'PNT' => 'Penta',
             ),
             'options' => array(
                 'limits' => array(
@@ -373,6 +379,7 @@ class bcex extends Exchange {
             'cost' => $cost,
             'order' => $orderId,
             'fee' => null,
+            'takerOrMaker' => null,
         );
     }
 
@@ -406,9 +413,9 @@ class bcex extends Exchange {
                 $result[$code] = $this->account();
             }
             if ($lockOrOver === 'lock') {
-                $result[$code]['used'] = floatval ($amount);
+                $result[$code]['used'] = floatval($amount);
             } else {
-                $result[$code]['free'] = floatval ($amount);
+                $result[$code]['free'] = floatval($amount);
             }
         }
         $keys = is_array($result) ? array_keys($result) : array();
@@ -521,6 +528,8 @@ class bcex extends Exchange {
             'remaining' => $this->safe_float($order, 'numberover'),
             'status' => $status,
             'fee' => null,
+            'clientOrderId' => null,
+            'trades' => null,
         );
     }
 
@@ -553,6 +562,7 @@ class bcex extends Exchange {
             'lastTradeTimestamp' => null,
             'symbol' => $symbol,
             'type' => $type,
+            'timeInForce' => null,
             'side' => $side,
             'price' => $price,
             'cost' => $cost,
@@ -562,6 +572,7 @@ class bcex extends Exchange {
             'remaining' => $remaining,
             'status' => $status,
             'fee' => $fee,
+            'trades' => null,
         );
         return $result;
     }

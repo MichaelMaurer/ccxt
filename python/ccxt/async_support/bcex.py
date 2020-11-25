@@ -18,20 +18,22 @@ class bcex(Exchange):
         return self.deep_extend(super(bcex, self).describe(), {
             'id': 'bcex',
             'name': 'BCEX',
-            'countries': ['CN', 'CA'],
+            'countries': ['CN', 'HK'],
             'version': '1',
             'has': {
-                'fetchBalance': True,
-                'fetchMarkets': True,
-                'createOrder': True,
                 'cancelOrder': True,
+                'createOrder': True,
+                'fetchBalance': True,
+                'fetchClosedOrders': 'emulated',
+                'fetchMarkets': True,
+                'fetchMyTrades': True,
+                'fetchOpenOrders': True,
+                'fetchOrder': True,
+                'fetchOrders': True,
+                'fetchOrderBook': True,
                 'fetchTicker': True,
                 'fetchTickers': False,
                 'fetchTrades': True,
-                'fetchOrder': True,
-                'fetchOrders': True,
-                'fetchClosedOrders': 'emulated',
-                'fetchOpenOrders': True,
                 'fetchTradingLimits': True,
             },
             'urls': {
@@ -101,6 +103,10 @@ class bcex(Exchange):
                 '您的btc不足': InsufficientFunds,  # {code: 1, msg: '您的btc不足'} - your btc is insufficient
                 '参数非法': InvalidOrder,  # {'code': 1, 'msg': '参数非法'} - 'Parameter illegal'
                 '订单信息不存在': OrderNotFound,  # {'code': 1, 'msg': '订单信息不存在'} - 'Order information does not exist'
+            },
+            'commonCurrencies': {
+                'UNI': 'UNI COIN',
+                'PNT': 'Penta',
             },
             'options': {
                 'limits': {
@@ -362,6 +368,7 @@ class bcex(Exchange):
             'cost': cost,
             'order': orderId,
             'fee': None,
+            'takerOrMaker': None,
         }
 
     async def fetch_trades(self, symbol, since=None, limit=None, params={}):
@@ -496,6 +503,8 @@ class bcex(Exchange):
             'remaining': self.safe_float(order, 'numberover'),
             'status': status,
             'fee': None,
+            'clientOrderId': None,
+            'trades': None,
         }
 
     def parse_order(self, order, market=None):
@@ -525,6 +534,7 @@ class bcex(Exchange):
             'lastTradeTimestamp': None,
             'symbol': symbol,
             'type': type,
+            'timeInForce': None,
             'side': side,
             'price': price,
             'cost': cost,
@@ -534,6 +544,7 @@ class bcex(Exchange):
             'remaining': remaining,
             'status': status,
             'fee': fee,
+            'trades': None,
         }
         return result
 

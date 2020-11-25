@@ -13,7 +13,7 @@ module.exports = class aofex extends Exchange {
         return this.deepExtend (super.describe (), {
             'id': 'aofex',
             'name': 'AOFEX',
-            'countries': [ 'GB', 'CN' ],
+            'countries': [ 'GB' ],
             'rateLimit': 1000,
             'has': {
                 'fetchMarkets': true,
@@ -30,6 +30,7 @@ module.exports = class aofex extends Exchange {
                 'fetchOpenOrders': true,
                 'fetchClosedOrders': true,
                 'fetchClosedOrder': true,
+                'fetchOrderTrades': true,
                 'fetchTradingFee': true,
             },
             'timeframes': {
@@ -226,7 +227,7 @@ module.exports = class aofex extends Exchange {
         return result;
     }
 
-    parseOHLCV (ohlcv, market = undefined, timeframe = '5m', since = undefined, limit = undefined) {
+    parseOHLCV (ohlcv, market = undefined) {
         //
         //     {
         //         id:  1584950100,
@@ -296,7 +297,7 @@ module.exports = class aofex extends Exchange {
         //
         const result = this.safeValue (response, 'result', {});
         const data = this.safeValue (result, 'data', []);
-        return this.parseOHLCVs (data, market, timeframe, since, limit);
+        return this.parseOHLCVs (data, market, since, limit);
     }
 
     async fetchBalance (params = {}) {
@@ -421,13 +422,9 @@ module.exports = class aofex extends Exchange {
         const percentage = change / open * 100;
         const baseVolume = this.safeFloat (ticker, 'amount');
         const quoteVolume = this.safeFloat (ticker, 'vol');
-        let vwap = undefined;
-        if (quoteVolume !== undefined) {
-            if (baseVolume !== undefined) {
-                if (baseVolume > 0) {
-                    vwap = parseFloat (this.priceToPrecision (symbol, quoteVolume / baseVolume));
-                }
-            }
+        let vwap = this.vwap (baseVolume, quoteVolume);
+        if (vwap !== undefined) {
+            vwap = parseFloat (this.priceToPrecision (symbol, vwap));
         }
         return {
             'symbol': symbol,
@@ -486,23 +483,10 @@ module.exports = class aofex extends Exchange {
         const result = {};
         for (let i = 0; i < tickers.length; i++) {
             const marketId = this.safeString (tickers[i], 'symbol');
-            let market = undefined;
-            let symbol = marketId;
-            if (marketId !== undefined) {
-                if (marketId in this.markets_by_id) {
-                    market = this.markets_by_id[marketId];
-                    symbol = market['symbol'];
-                } else {
-                    const [ baseId, quoteId ] = marketId.split ('-');
-                    const base = this.safeCurrencyCode (baseId);
-                    const quote = this.safeCurrencyCode (quoteId);
-                    symbol = base + '/' + quote;
-                }
-            }
+            const market = this.safeMarket (marketId, undefined, '-');
+            const symbol = market['symbol'];
             const data = this.safeValue (tickers[i], 'data', {});
-            const ticker = this.parseTicker (data, market);
-            ticker['symbol'] = symbol;
-            result[symbol] = ticker;
+            result[symbol] = this.parseTicker (data, market);
         }
         return this.filterByArray (result, 'symbol', symbols);
     }
@@ -559,7 +543,7 @@ module.exports = class aofex extends Exchange {
         //
         const id = this.safeString (trade, 'id');
         const ctime = this.parse8601 (this.safeString (trade, 'ctime'));
-        const timestamp = this.safeTimestamp (trade, 'ts', ctime);
+        const timestamp = this.safeTimestamp (trade, 'ts', ctime) - 28800000; // 8 hours, adjust to UTC;
         let symbol = undefined;
         if ((symbol === undefined) && (market !== undefined)) {
             symbol = market['symbol'];
@@ -706,26 +690,12 @@ module.exports = class aofex extends Exchange {
         const id = this.safeString (order, 'order_sn');
         const orderStatus = this.safeString (order, 'status');
         const status = this.parseOrderStatus (orderStatus);
-        let symbol = undefined;
         const marketId = this.safeString (order, 'symbol');
-        let base = undefined;
-        let quote = undefined;
-        if (marketId !== undefined) {
-            if (marketId in this.markets_by_id) {
-                market = this.markets_by_id[marketId];
-            } else {
-                const [ baseId, quoteId ] = marketId.split ('-');
-                base = this.safeCurrencyCode (baseId);
-                quote = this.safeCurrencyCode (quoteId);
-                symbol = base + '/' + quote;
-            }
+        market = this.safeMarket (marketId, market, '-');
+        let timestamp = this.parse8601 (this.safeString (order, 'ctime'));
+        if (timestamp !== undefined) {
+            timestamp -= 28800000; // 8 hours, adjust to UTC
         }
-        if ((symbol === undefined) && (market !== undefined)) {
-            symbol = market['symbol'];
-            base = market['base'];
-            quote = market['quote'];
-        }
-        const timestamp = this.parse8601 (this.safeString (order, 'ctime'));
         const orderType = this.safeString (order, 'type');
         const type = (orderType === '2') ? 'limit' : 'market';
         const side = this.safeString (order, 'side');
@@ -789,7 +759,7 @@ module.exports = class aofex extends Exchange {
                     }
                 }
                 if (feeCost !== undefined) {
-                    const feeCurrencyCode = (side === 'buy') ? base : quote;
+                    const feeCurrencyCode = (side === 'buy') ? market['base'] : market['quote'];
                     fee = {
                         'cost': feeCost,
                         'currency': feeCurrencyCode,
@@ -825,8 +795,9 @@ module.exports = class aofex extends Exchange {
             'datetime': this.iso8601 (timestamp),
             'lastTradeTimestamp': lastTradeTimestamp,
             'status': status,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': type,
+            'timeInForce': undefined,
             'side': side,
             'price': price,
             'cost': cost,
@@ -883,11 +854,16 @@ module.exports = class aofex extends Exchange {
         return this.parseOrder (order);
     }
 
+    async fetchOrderTrades (id, symbol = undefined, since = undefined, limit = undefined, params = {}) {
+        const response = await this.fetchClosedOrder (id, symbol, params);
+        return this.safeValue (response, 'trades', []);
+    }
+
     async fetchOrdersWithMethod (method, symbol = undefined, since = undefined, limit = undefined, params = {}) {
         await this.loadMarkets ();
         const request = {
             // 'from': 'BM7442641584965237751ZMAKJ5', // query start order_sn
-            // 'direct': 'prev', // next
+            'direct': 'prev', // next
         };
         let market = undefined;
         if (symbol !== undefined) {
@@ -1021,6 +997,7 @@ module.exports = class aofex extends Exchange {
             'remaining': undefined,
             'trades': undefined,
             'fee': undefined,
+            'clientOrderId': undefined,
         };
     }
 

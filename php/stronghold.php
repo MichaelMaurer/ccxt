@@ -13,7 +13,7 @@ use \ccxt\NotSupported;
 class stronghold extends Exchange {
 
     public function describe() {
-        return array_replace_recursive(parent::describe (), array(
+        return $this->deep_extend(parent::describe (), array(
             'id' => 'stronghold',
             'name' => 'Stronghold',
             'country' => array( 'US' ),
@@ -37,20 +37,23 @@ class stronghold extends Exchange {
                 'password' => true,
             ),
             'has' => array(
-                'fetchMarkets' => true,
-                'fetchCurrencies' => true,
-                'fetchOrderBook' => true,
-                'fetchOpenOrders' => true,
-                'fetchTime' => true,
-                'fetchTrades' => true,
-                'fetchMyTrades' => true,
-                'fetchDepositAddress' => false,
+                'cancelOrder' => true,
                 'createDepositAddress' => true,
-                'withdraw' => true,
+                'createOrder' => true,
+                'fetchAccounts' => true,
+                'fetchBalance' => true,
+                'fetchDepositAddress' => false,
+                'fetchCurrencies' => true,
+                'fetchMarkets' => true,
+                'fetchMyTrades' => true,
+                'fetchOpenOrders' => true,
+                'fetchOrderBook' => true,
                 'fetchTicker' => false,
                 'fetchTickers' => false,
-                'fetchAccounts' => true,
+                'fetchTime' => true,
+                'fetchTrades' => true,
                 'fetchTransactions' => true,
+                'withdraw' => true,
             ),
             'api' => array(
                 'public' => array(
@@ -226,6 +229,7 @@ class stronghold extends Exchange {
                 'precision' => $precision,
                 'info' => $entry,
                 'limits' => $limits,
+                'active' => null,
             );
         }
         return $result;
@@ -283,6 +287,7 @@ class stronghold extends Exchange {
                 'active' => null,
                 'name' => null,
                 'limits' => $limits,
+                'fee' => null,
             );
         }
         return $result;
@@ -369,8 +374,8 @@ class stronghold extends Exchange {
         $timestamp = null;
         $orderId = null;
         if (gettype($trade) === 'array' && count(array_filter(array_keys($trade), 'is_string')) == 0) {
-            $price = floatval ($trade[0]);
-            $amount = floatval ($trade[1]);
+            $price = floatval($trade[0]);
+            $amount = floatval($trade[1]);
             $side = $trade[2];
             $timestamp = $this->parse8601($trade[3]);
         } else {
@@ -596,6 +601,7 @@ class stronghold extends Exchange {
             'status' => null,
             'type' => null,
             'average' => null,
+            'fee' => null,
         );
     }
 

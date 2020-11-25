@@ -7,17 +7,17 @@ namespace ccxt;
 
 use Exception; // a common import
 
-class okcoin extends okex3 {
+class okcoin extends okex {
 
     public function describe() {
-        return array_replace_recursive(parent::describe (), array(
+        return $this->deep_extend(parent::describe (), array(
             'id' => 'okcoin',
             'name' => 'OKCoin',
             'countries' => array( 'CN', 'US' ),
             'hostname' => 'okcoin.com',
             'pro' => true,
             'urls' => array(
-                'logo' => 'https://user-images.githubusercontent.com/1294454/27766791-89ffb502-5ee5-11e7-8a5b-c5950b68ac65.jpg',
+                'logo' => 'https://user-images.githubusercontent.com/51840849/87295551-102fbf00-c50e-11ea-90a9-462eebba5829.jpg',
                 'www' => 'https://www.okcoin.com',
                 'doc' => 'https://www.okcoin.com/docs/en/',
                 'fees' => 'https://www.okcoin.com/coin-fees',

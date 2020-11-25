@@ -12,15 +12,22 @@ use \ccxt\ArgumentsRequired;
 class btctradeua extends Exchange {
 
     public function describe() {
-        return array_replace_recursive(parent::describe (), array(
+        return $this->deep_extend(parent::describe (), array(
             'id' => 'btctradeua',
             'name' => 'BTC Trade UA',
             'countries' => array( 'UA' ), // Ukraine,
             'rateLimit' => 3000,
             'has' => array(
+                'cancelOrder' => true,
                 'CORS' => false,
                 'createMarketOrder' => false,
+                'createOrder' => true,
+                'fetchBalance' => true,
                 'fetchOpenOrders' => true,
+                'fetchOrderBook' => true,
+                'fetchTicker' => true,
+                'fetchTrades' => true,
+                'signIn' => true,
             ),
             'urls' => array(
                 'referral' => 'https://btc-trade.com.ua/registration/22689',
@@ -230,7 +237,7 @@ class btctradeua extends Exchange {
         $timestamp = $this->parse8601($ymdhms);
         // server reports local time, adjust to UTC
         $md = implode('', array($month, $day));
-        $md = intval ($md);
+        $md = intval($md);
         // a special case for DST
         // subtract 2 hours during winter
         if ($md < 325 || $md > 1028) {
@@ -330,6 +337,7 @@ class btctradeua extends Exchange {
             'status' => 'open',
             'symbol' => $symbol,
             'type' => null,
+            'timeInForce' => null,
             'side' => $this->safe_string($order, 'type'),
             'price' => $this->safe_float($order, 'price'),
             'amount' => $this->safe_float($order, 'amnt_trade'),
@@ -337,6 +345,9 @@ class btctradeua extends Exchange {
             'remaining' => $this->safe_float($order, 'amnt_trade'),
             'trades' => null,
             'info' => $order,
+            'cost' => null,
+            'average' => null,
+            'fee' => null,
         );
     }
 

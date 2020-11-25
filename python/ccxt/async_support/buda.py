@@ -4,12 +4,12 @@
 # https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 from ccxt.async_support.base.exchange import Exchange
-import base64
 import hashlib
 import math
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import PermissionDenied
+from ccxt.base.errors import ArgumentsRequired
 from ccxt.base.errors import AddressPending
 from ccxt.base.errors import NotSupported
 
@@ -24,19 +24,25 @@ class buda(Exchange):
             'rateLimit': 1000,
             'version': 'v2',
             'has': {
+                'cancelOrder': True,
                 'CORS': False,
                 'createDepositAddress': True,
+                'createOrder': True,
+                'fetchBalance': True,
                 'fetchClosedOrders': True,
                 'fetchCurrencies': True,
                 'fetchDepositAddress': True,
                 'fetchDeposits': True,
                 'fetchFundingFees': True,
+                'fetchMarkets': True,
                 'fetchMyTrades': False,
                 'fetchOHLCV': True,
                 'fetchOpenOrders': True,
                 'fetchOrder': True,
+                'fetchOrderBook': True,
                 'fetchOrders': True,
                 'fetchTrades': True,
+                'fetchTicker': True,
                 'fetchWithdrawals': True,
                 'withdraw': True,
             },
@@ -503,13 +509,8 @@ class buda(Exchange):
     def parse_order(self, order, market=None):
         id = self.safe_string(order, 'id')
         timestamp = self.parse8601(self.safe_string(order, 'created_at'))
-        symbol = None
-        if market is None:
-            marketId = order['market_id']
-            if marketId in self.markets_by_id:
-                market = self.markets_by_id[marketId]
-        if market is not None:
-            symbol = market['symbol']
+        marketId = self.safe_string(order, 'market_id')
+        symbol = self.safe_symbol(marketId, market)
         type = self.safe_string(order, 'price_type')
         side = self.safe_string_lower(order, 'type')
         status = self.parse_order_status(self.safe_string(order, 'state'))
@@ -535,6 +536,7 @@ class buda(Exchange):
             'status': status,
             'symbol': symbol,
             'type': type,
+            'timeInForce': None,
             'side': side,
             'price': price,
             'cost': cost,
@@ -544,6 +546,7 @@ class buda(Exchange):
             'trades': None,
             'fee': fee,
             'info': order,
+            'average': None,
         }
 
     def is_fiat(self, code):
@@ -645,7 +648,7 @@ class buda(Exchange):
     async def fetch_deposits(self, code=None, since=None, limit=None, params={}):
         await self.load_markets()
         if code is None:
-            raise ExchangeError(self.id + ': fetchDeposits() requires a currency code argument')
+            raise ArgumentsRequired(self.id + ': fetchDeposits() requires a currency code argument')
         currency = self.currency(code)
         request = {
             'currency': currency['id'],
@@ -658,7 +661,7 @@ class buda(Exchange):
     async def fetch_withdrawals(self, code=None, since=None, limit=None, params={}):
         await self.load_markets()
         if code is None:
-            raise ExchangeError(self.id + ': fetchDeposits() requires a currency code argument')
+            raise ArgumentsRequired(self.id + ': fetchDeposits() requires a currency code argument')
         currency = self.currency(code)
         request = {
             'currency': currency['id'],
@@ -700,7 +703,7 @@ class buda(Exchange):
             nonce = str(self.nonce())
             components = [method, '/api/' + self.version + '/' + request]
             if body:
-                base64Body = base64.b64encode(self.encode(body))
+                base64Body = self.string_to_base64(body)
                 components.append(self.decode(base64Body))
             components.append(nonce)
             message = ' '.join(components)

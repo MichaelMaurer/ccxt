@@ -4,7 +4,6 @@
 # https://github.com/ccxt/ccxt/blob/master/CONTRIBUTING.md#how-to-contribute-code
 
 from ccxt.base.exchange import Exchange
-import base64
 import math
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
@@ -29,20 +28,27 @@ class bytetrade(Exchange):
             'certified': True,
             # new metainfo interface
             'has': {
+                'cancelOrder': True,
+                'CORS': False,
+                'createOrder': True,
+                'fetchBalance': True,
+                'fetchBidsAsks': True,
+                'fetchClosedOrders': True,
                 'fetchCurrencies': True,
                 'fetchDepositAddress': True,
-                'CORS': False,
-                'fetchBidsAsks': True,
-                'fetchTickers': True,
-                'fetchOHLCV': True,
-                'fetchMyTrades': True,
-                'fetchOrder': True,
-                'fetchOrders': True,
-                'fetchOpenOrders': True,
-                'fetchClosedOrders': True,
-                'withdraw': True,
                 'fetchDeposits': True,
+                'fetchMarkets': True,
+                'fetchMyTrades': True,
+                'fetchOHLCV': True,
+                'fetchOpenOrders': True,
+                'fetchOrder': True,
+                'fetchOrderBook': True,
+                'fetchOrders': True,
+                'fetchTicker': True,
+                'fetchTickers': True,
+                'fetchTrades': True,
                 'fetchWithdrawals': True,
+                'withdraw': True,
             },
             'timeframes': {
                 '1m': '1m',
@@ -57,11 +63,17 @@ class bytetrade(Exchange):
                 '1M': '1M',
             },
             'urls': {
-                'test': 'https://api-v2-test.bytetrade.com',
+                'test': {
+                    'market': 'https://api-v2-test.byte-trade.com',
+                    'public': 'https://api-v2-test.byte-trade.com',
+                },
                 'logo': 'https://user-images.githubusercontent.com/1294454/67288762-2f04a600-f4e6-11e9-9fd6-c60641919491.jpg',
-                'api': 'https://api-v2.bytetrade.com',
-                'www': 'https://www.bytetrade.com',
-                'doc': 'https://github.com/Bytetrade/bytetrade-official-api-docs/wiki',
+                'api': {
+                    'market': 'https://api-v2.byte-trade.com',
+                    'public': 'https://api-v2.byte-trade.com',
+                },
+                'www': 'https://www.byte-trade.com',
+                'doc': 'https://docs.byte-trade.com/#description',
             },
             'api': {
                 'market': {
@@ -102,8 +114,10 @@ class bytetrade(Exchange):
                 },
             },
             'commonCurrencies': {
+                '1': 'ByteTrade',
                 '44': 'ByteHub',
                 '48': 'Blocktonic',
+                '133': 'TerraCredit',
             },
             'exceptions': {
                 'vertify error': AuthenticationError,  # typo on the exchange side, 'vertify'
@@ -125,7 +139,7 @@ class bytetrade(Exchange):
             else:
                 code = self.safe_string(currency, 'name')
             name = self.safe_string(currency, 'fullname')
-            # in bytetrade.com DEX, request https://api-v2.bytetrade.com/currencies will return currencies,
+            # in byte-trade.com DEX, request https://api-v2.byte-trade.com/currencies will return currencies,
             # the api doc is https://github.com/Bytetrade/bytetrade-official-api-docs/wiki/rest-api#get-currencies-get-currencys-supported-in-bytetradecom
             # we can see the coin name is none-unique in the result, the coin which code is 18 is the CyberMiles ERC20, and the coin which code is 35 is the CyberMiles main chain, but their name is same.
             # that is because bytetrade is a DEX, supports people create coin with the same name, but the id(code) of coin is unique, so we should use the id or name and id as the identity of coin.
@@ -191,10 +205,7 @@ class bytetrade(Exchange):
                 'code': code,
                 'name': name,
                 'active': active,
-                'precision': {
-                    'amount': amountPrecision,
-                    'price': None,
-                },
+                'precision': amountPrecision,
                 'fee': None,
                 'limits': {
                     'amount': {'min': None, 'max': None},
@@ -221,11 +232,13 @@ class bytetrade(Exchange):
             id = self.safe_string(market, 'symbol')
             base = self.safe_string(market, 'baseName')
             quote = self.safe_string(market, 'quoteName')
-            normalBase = base.split('@')[0]
-            normalQuote = quote.split('@')[0]
-            normalSymbol = normalBase + '/' + normalQuote
             baseId = self.safe_string(market, 'base')
             quoteId = self.safe_string(market, 'quote')
+            normalBase = base.split('@' + baseId)[0]
+            normalQuote = quote.split('@' + quoteId)[0]
+            if quoteId == '126':
+                normalQuote = 'ZAR'  # The id 126 coin is a special coin whose name on the chain is actually ZAR, but it is changed to ZCN after creation, so it must be changed to ZAR when placing the transaction in the chain
+            normalSymbol = normalBase + '/' + normalQuote
             if baseId in self.commonCurrencies:
                 base = self.commonCurrencies[baseId]
             if quoteId in self.commonCurrencies:
@@ -410,14 +423,24 @@ class bytetrade(Exchange):
         rawTickers = self.marketGetTickers(params)
         return self.parse_tickers(rawTickers, symbols)
 
-    def parse_ohlcv(self, ohlcv, market=None, timeframe='1m', since=None, limit=None):
+    def parse_ohlcv(self, ohlcv, market=None):
+        #
+        #     [
+        #         1591505760000,
+        #         "242.7",
+        #         "242.76",
+        #         "242.69",
+        #         "242.76",
+        #         "0.1892"
+        #     ]
+        #
         return [
-            ohlcv[0],
-            float(ohlcv[1]),
-            float(ohlcv[2]),
-            float(ohlcv[3]),
-            float(ohlcv[4]),
-            float(ohlcv[5]),
+            self.safe_integer(ohlcv, 0),
+            self.safe_float(ohlcv, 1),
+            self.safe_float(ohlcv, 2),
+            self.safe_float(ohlcv, 3),
+            self.safe_float(ohlcv, 4),
+            self.safe_float(ohlcv, 5),
         ]
 
     def fetch_ohlcv(self, symbol, timeframe='1m', since=None, limit=None, params={}):
@@ -432,6 +455,13 @@ class bytetrade(Exchange):
         if limit is not None:
             request['limit'] = limit
         response = self.marketGetKlines(self.extend(request, params))
+        #
+        #     [
+        #         [1591505760000,"242.7","242.76","242.69","242.76","0.1892"],
+        #         [1591505820000,"242.77","242.83","242.7","242.72","0.6378"],
+        #         [1591505880000,"242.72","242.73","242.61","242.72","0.4141"],
+        #     ]
+        #
         return self.parse_ohlcvs(response, market, timeframe, since, limit)
 
     def parse_trade(self, trade, market=None):
@@ -443,7 +473,7 @@ class bytetrade(Exchange):
         type = self.safe_string(trade, 'type')
         takerOrMaker = self.safe_string(trade, 'takerOrMaker')
         side = self.safe_string(trade, 'side')
-        datetime = self.safe_string(trade, 'datetime')
+        datetime = self.iso8601(timestamp)  # self.safe_string(trade, 'datetime')
         order = self.safe_string(trade, 'order')
         fee = self.safe_value(trade, 'fee')
         symbol = None
@@ -518,6 +548,7 @@ class bytetrade(Exchange):
             'lastTradeTimestamp': lastTradeTimestamp,
             'symbol': symbol,
             'type': type,
+            'timeInForce': None,
             'side': side,
             'price': price,
             'amount': amount,
@@ -527,6 +558,7 @@ class bytetrade(Exchange):
             'remaining': remaining,
             'status': status,
             'fee': fee,
+            'trades': None,
         }
 
     def create_order(self, symbol, type, side, amount, price=None, params={}):
@@ -550,11 +582,11 @@ class bytetrade(Exchange):
         baseId = market['baseId']
         baseCurrency = self.currency(market['base'])
         amountTruncated = self.amount_to_precision(symbol, amount)
-        amountChain = self.to_wei(amountTruncated, baseCurrency['precision']['amount'])
+        amountChain = self.to_wei(amountTruncated, baseCurrency['precision'])
         quoteId = market['quoteId']
         quoteCurrency = self.currency(market['quote'])
         priceRounded = self.price_to_precision(symbol, price)
-        priceChain = self.to_wei(priceRounded, quoteCurrency['precision']['amount'])
+        priceChain = self.to_wei(priceRounded, quoteCurrency['precision'])
         now = self.milliseconds()
         expiration = self.milliseconds()
         datetime = self.iso8601(now)
@@ -564,6 +596,8 @@ class bytetrade(Exchange):
         defaultDappId = 'Sagittarius'
         dappId = self.safe_string(params, 'dappId', defaultDappId)
         defaultFee = self.safe_string(self.options, 'fee', '300000000000000')
+        totalFeeRate = self.safe_string(params, 'totalFeeRate', 8)
+        chainFeeRate = self.safe_string(params, 'chainFeeRate', 1)
         fee = self.safe_string(params, 'fee', defaultFee)
         eightBytes = self.integer_pow('2', '64')
         allByteStringArray = [
@@ -588,7 +622,10 @@ class bytetrade(Exchange):
             self.number_to_le(0, 2),
             self.number_to_le(int(math.floor(now / 1000)), 4),
             self.number_to_le(int(math.floor(expiration / 1000)), 4),
-            self.number_to_le(0, 2),
+            self.number_to_le(1, 1),
+            self.number_to_le(int(chainFeeRate), 2),
+            self.number_to_le(1, 1),
+            self.number_to_le(int(totalFeeRate), 2),
             self.number_to_le(int(quoteId), 4),
             self.number_to_le(int(baseId), 4),
             self.number_to_le(0, 1),
@@ -618,7 +655,10 @@ class bytetrade(Exchange):
             self.number_to_le(0, 2),
             self.number_to_le(int(math.floor(now / 1000)), 4),
             self.number_to_le(int(math.floor(expiration / 1000)), 4),
-            self.number_to_le(0, 2),
+            self.number_to_le(1, 1),
+            self.number_to_le(int(chainFeeRate), 2),
+            self.number_to_le(1, 1),
+            self.number_to_le(int(totalFeeRate), 2),
             self.number_to_le(int(quoteId), 4),
             self.number_to_le(int(baseId), 4),
             self.number_to_le(0, 1),
@@ -641,7 +681,7 @@ class bytetrade(Exchange):
         bytestring = self.binary_concat_array(allByteStringArray)
         hash = self.hash(bytestring, 'sha256', 'hex')
         signature = self.ecdsa(hash, self.secret, 'secp256k1', None, True)
-        recoveryParam = self.decode(base64.b16encode(self.number_to_le(self.sum(signature['v'], 31), 1)))
+        recoveryParam = self.binary_to_base16(self.number_to_le(self.sum(signature['v'], 31), 1))
         mySignature = recoveryParam + signature['r'] + signature['s']
         operation = {
             'now': datetime,
@@ -656,6 +696,8 @@ class bytetrade(Exchange):
             'use_btt_as_fee': False,
             'money_id': int(quoteId),
             'stock_id': int(baseId),
+            'custom_no_btt_fee_rate': int(totalFeeRate),
+            'custom_btt_fee_rate': int(chainFeeRate),
         }
         fatty = {
             'timestamp': datetime,
@@ -696,6 +738,8 @@ class bytetrade(Exchange):
             'cost': None,
             'trades': None,
             'fee': None,
+            'clientOrderId': None,
+            'average': None,
         }
 
     def fetch_order(self, id, symbol=None, params={}):
@@ -805,7 +849,7 @@ class bytetrade(Exchange):
         bytestring = self.binary_concat_array(byteStringArray)
         hash = self.hash(bytestring, 'sha256', 'hex')
         signature = self.ecdsa(hash, self.secret, 'secp256k1', None, True)
-        recoveryParam = self.decode(base64.b16encode(self.number_to_le(self.sum(signature['v'], 31), 1)))
+        recoveryParam = self.binary_to_base16(self.number_to_le(self.sum(signature['v'], 31), 1))
         mySignature = recoveryParam + signature['r'] + signature['s']
         operation = {
             'fee': feeAmount,
@@ -854,6 +898,8 @@ class bytetrade(Exchange):
             'cost': None,
             'trades': None,
             'fee': None,
+            'clientOrderId': None,
+            'average': None,
         }
 
     def transfer(self, code, amount, address, message='', params={}):
@@ -862,8 +908,8 @@ class bytetrade(Exchange):
             raise ArgumentsRequired('transfer requires self.apiKey')
         self.load_markets()
         currency = self.currency(code)
-        amountTruncate = self.decimal_to_precision(amount, TRUNCATE, currency['info']['transferPrecision'], DECIMAL_PLACES, NO_PADDING)
-        amountChain = self.to_wei(amountTruncate, currency['precision']['amount'])
+        amountTruncate = self.decimal_to_precision(amount, TRUNCATE, currency['info']['basePrecision'] - currency['info']['transferPrecision'], DECIMAL_PLACES, NO_PADDING)
+        amountChain = self.to_wei(amountTruncate, currency['precision'])
         assetType = int(currency['id'])
         now = self.milliseconds()
         expiration = now
@@ -903,7 +949,7 @@ class bytetrade(Exchange):
         bytestring = self.binary_concat_array(byteStringArray)
         hash = self.hash(bytestring, 'sha256', 'hex')
         signature = self.ecdsa(hash, self.secret, 'secp256k1', None, True)
-        recoveryParam = self.decode(base64.b16encode(self.number_to_le(self.sum(signature['v'], 31), 1)))
+        recoveryParam = self.binary_to_base16(self.number_to_le(self.sum(signature['v'], 31), 1))
         mySignature = recoveryParam + signature['r'] + signature['s']
         operation = {
             'fee': '300000000000000',
@@ -955,6 +1001,9 @@ class bytetrade(Exchange):
             'remaining': None,
             'cost': None,
             'fee': None,
+            'clientOrderId': None,
+            'average': None,
+            'trades': None,
         }
 
     def fetch_my_trades(self, symbol=None, since=None, limit=None, params={}):
@@ -1115,7 +1164,7 @@ class bytetrade(Exchange):
         feeAmount = '300000000000000'
         currency = self.currency(code)
         coinId = currency['id']
-        amountTruncate = self.decimal_to_precision(amount, TRUNCATE, currency['info']['transferPrecision'], DECIMAL_PLACES, NO_PADDING)
+        amountTruncate = self.decimal_to_precision(amount, TRUNCATE, currency['info']['basePrecision'] - currency['info']['transferPrecision'], DECIMAL_PLACES, NO_PADDING)
         amountChain = self.to_wei(amountTruncate, currency['info']['externalPrecision'])
         eightBytes = self.integer_pow('2', '64')
         assetFee = 0
@@ -1136,7 +1185,7 @@ class bytetrade(Exchange):
                 self.number_to_le(len(address), 1),
                 self.encode(address),
                 self.number_to_le(int(coinId), 4),
-                self.number_to_le(int(math.floor(int(float(self.integer_divide(amountChain, eightBytes))))), 8),
+                self.number_to_le(self.integer_divide(amountChain, eightBytes), 8),
                 self.number_to_le(self.integer_modulo(amountChain, eightBytes), 8),
                 self.number_to_le(1, 1),
                 self.number_to_le(self.integer_divide(assetFee, eightBytes), 8),
@@ -1169,7 +1218,7 @@ class bytetrade(Exchange):
                 self.number_to_le(len(middleAddress), 1),
                 self.encode(middleAddress),
                 self.number_to_le(int(coinId), 4),
-                self.number_to_le(int(math.floor(int(float(self.integer_divide(amountChain, eightBytes))))), 8),
+                self.number_to_le(self.integer_divide(amountChain, eightBytes), 8),
                 self.number_to_le(self.integer_modulo(amountChain, eightBytes), 8),
                 self.number_to_le(0, 1),
                 self.number_to_le(1, 1),
@@ -1180,7 +1229,7 @@ class bytetrade(Exchange):
         bytestring = self.binary_concat_array(byteStringArray)
         hash = self.hash(bytestring, 'sha256', 'hex')
         signature = self.ecdsa(hash, self.secret, 'secp256k1', None, True)
-        recoveryParam = self.decode(base64.b16encode(self.number_to_le(self.sum(signature['v'], 31), 1)))
+        recoveryParam = self.binary_to_base16(self.number_to_le(self.sum(signature['v'], 31), 1))
         mySignature = recoveryParam + signature['r'] + signature['s']
         fatty = None
         request = None
@@ -1268,7 +1317,7 @@ class bytetrade(Exchange):
         }
 
     def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):
-        url = self.urls['api']
+        url = self.urls['api'][api]
         url += '/' + path
         if params:
             url += '?' + self.urlencode(params)

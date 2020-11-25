@@ -6,6 +6,7 @@
 from ccxt.base.exchange import Exchange
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import ArgumentsRequired
+from ccxt.base.errors import InsufficientFunds
 from ccxt.base.errors import InvalidOrder
 from ccxt.base.errors import OrderNotFound
 from ccxt.base.errors import RateLimitExceeded
@@ -20,18 +21,22 @@ class coinmate(Exchange):
             'countries': ['GB', 'CZ', 'EU'],  # UK, Czech Republic
             'rateLimit': 1000,
             'has': {
-                'CORS': True,
-                'fetchBalance': True,
-                'fetchOrders': True,
-                'fetchOrder': True,
-                'fetchMyTrades': True,
-                'fetchTransactions': True,
-                'fetchOpenOrders': True,
-                'createOrder': True,
                 'cancelOrder': True,
+                'CORS': True,
+                'createOrder': True,
+                'fetchBalance': True,
+                'fetchMarkets': True,
+                'fetchMyTrades': True,
+                'fetchOpenOrders': True,
+                'fetchOrder': True,
+                'fetchOrderBook': True,
+                'fetchOrders': True,
+                'fetchTicker': True,
+                'fetchTrades': True,
+                'fetchTransactions': True,
             },
             'urls': {
-                'logo': 'https://user-images.githubusercontent.com/1294454/27811229-c1efb510-606c-11e7-9a36-84ba2ce412d8.jpg',
+                'logo': 'https://user-images.githubusercontent.com/51840849/87460806-1c9f3f00-c616-11ea-8c46-a77018a8f3f4.jpg',
                 'api': 'https://coinmate.io/api',
                 'www': 'https://coinmate.io',
                 'fees': 'https://coinmate.io/fees',
@@ -168,6 +173,7 @@ class coinmate(Exchange):
                     'No order with given ID': OrderNotFound,
                 },
                 'broad': {
+                    'Not enough account balance available': InsufficientFunds,
                     'Incorrect order ID': InvalidOrder,
                     'Minimum Order Size ': InvalidOrder,
                     'TOO MANY REQUESTS': RateLimitExceeded,
@@ -384,7 +390,7 @@ class coinmate(Exchange):
             'status': status,
             'fee': {
                 'cost': fee,
-                'currency': currency,
+                'currency': code,
             },
             'info': item,
         }
@@ -433,21 +439,8 @@ class coinmate(Exchange):
         #         "tradeType":"BUY"
         #     }
         #
-        symbol = None
         marketId = self.safe_string(trade, 'currencyPair')
-        quote = None
-        if marketId is not None:
-            if marketId in self.markets_by_id[marketId]:
-                market = self.markets_by_id[marketId]
-                quote = market['quote']
-            else:
-                baseId, quoteId = marketId.split('_')
-                base = self.safe_currency_code(baseId)
-                quote = self.safe_currency_code(quoteId)
-                symbol = base + '/' + quote
-        if symbol is None:
-            if market is not None:
-                symbol = market['symbol']
+        market = self.safe_market(marketId, market, '_')
         price = self.safe_float(trade, 'price')
         amount = self.safe_float(trade, 'amount')
         cost = None
@@ -464,7 +457,7 @@ class coinmate(Exchange):
         if feeCost is not None:
             fee = {
                 'cost': feeCost,
-                'currency': quote,
+                'currency': market['quote'],
             }
         takerOrMaker = self.safe_string(trade, 'feeType')
         takerOrMaker = 'maker' if (takerOrMaker == 'MAKER') else 'taker'
@@ -473,7 +466,7 @@ class coinmate(Exchange):
             'info': trade,
             'timestamp': timestamp,
             'datetime': self.iso8601(timestamp),
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': type,
             'side': side,
             'order': orderId,
@@ -534,6 +527,7 @@ class coinmate(Exchange):
         statuses = {
             'FILLED': 'closed',
             'CANCELLED': 'canceled',
+            'PARTIALLY_FILLED': 'open',
             'OPEN': 'open',
         }
         return self.safe_string(statuses, status, status)
@@ -592,29 +586,23 @@ class coinmate(Exchange):
         timestamp = self.safe_integer(order, 'timestamp')
         side = self.safe_string_lower(order, 'type')
         price = self.safe_float(order, 'price')
-        amount = self.safe_float_2(order, 'originalAmount', 'amount')
-        remaining = self.safe_float(order, 'remainingAmount', amount)
+        amount = self.safe_float(order, 'originalAmount')
+        remaining = self.safe_float(order, 'remainingAmount')
+        if remaining is None:
+            remaining = self.safe_float(order, 'amount')
         status = self.parse_order_status(self.safe_string(order, 'status'))
         type = self.parse_order_type(self.safe_string(order, 'orderTradeType'))
         filled = None
         cost = None
         if (amount is not None) and (remaining is not None):
-            filled = amount - remaining
+            filled = max(amount - remaining, 0)
+            if remaining == 0:
+                status = 'closed'
             if price is not None:
                 cost = filled * price
         average = self.safe_float(order, 'avgPrice')
-        symbol = None
         marketId = self.safe_string(order, 'currencyPair')
-        if marketId is not None:
-            if marketId in self.markets_by_id:
-                market = self.markets_by_id[marketId]
-            else:
-                baseId, quoteId = marketId.split('_')
-                base = self.safe_currency_code(baseId)
-                quote = self.safe_currency_code(quoteId)
-                symbol = base + '/' + quote
-        if (symbol is None) and (market is not None):
-            symbol = market['symbol']
+        symbol = self.safe_symbol(marketId, market, '_')
         clientOrderId = self.safe_string(order, 'clientOrderId')
         return {
             'id': id,
@@ -624,6 +612,7 @@ class coinmate(Exchange):
             'lastTradeTimestamp': None,
             'symbol': symbol,
             'type': type,
+            'timeInForce': None,
             'side': side,
             'price': price,
             'amount': amount,
@@ -634,6 +623,7 @@ class coinmate(Exchange):
             'status': status,
             'trades': None,
             'info': order,
+            'fee': None,
         }
 
     def create_order(self, symbol, type, side, amount, price=None, params={}):

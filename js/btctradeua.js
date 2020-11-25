@@ -15,9 +15,16 @@ module.exports = class btctradeua extends Exchange {
             'countries': [ 'UA' ], // Ukraine,
             'rateLimit': 3000,
             'has': {
+                'cancelOrder': true,
                 'CORS': false,
                 'createMarketOrder': false,
+                'createOrder': true,
+                'fetchBalance': true,
                 'fetchOpenOrders': true,
+                'fetchOrderBook': true,
+                'fetchTicker': true,
+                'fetchTrades': true,
+                'signIn': true,
             },
             'urls': {
                 'referral': 'https://btc-trade.com.ua/registration/22689',
@@ -327,6 +334,7 @@ module.exports = class btctradeua extends Exchange {
             'status': 'open',
             'symbol': symbol,
             'type': undefined,
+            'timeInForce': undefined,
             'side': this.safeString (order, 'type'),
             'price': this.safeFloat (order, 'price'),
             'amount': this.safeFloat (order, 'amnt_trade'),
@@ -334,6 +342,9 @@ module.exports = class btctradeua extends Exchange {
             'remaining': this.safeFloat (order, 'amnt_trade'),
             'trades': undefined,
             'info': order,
+            'cost': undefined,
+            'average': undefined,
+            'fee': undefined,
         };
     }
 

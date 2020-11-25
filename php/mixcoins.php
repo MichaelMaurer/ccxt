@@ -11,7 +11,7 @@ use \ccxt\ExchangeError;
 class mixcoins extends Exchange {
 
     public function describe() {
-        return array_replace_recursive(parent::describe (), array(
+        return $this->deep_extend(parent::describe (), array(
             'id' => 'mixcoins',
             'name' => 'MixCoins',
             'countries' => array( 'GB', 'HK' ),
@@ -19,10 +19,16 @@ class mixcoins extends Exchange {
             'version' => 'v1',
             'userAgent' => $this->userAgents['chrome'],
             'has' => array(
+                'cancelOrder' => true,
                 'CORS' => false,
+                'createOrder' => true,
+                'fetchBalance' => true,
+                'fetchOrderBook' => true,
+                'fetchTicker' => true,
+                'fetchTrades' => true,
             ),
             'urls' => array(
-                'logo' => 'https://user-images.githubusercontent.com/1294454/30237212-ed29303c-9535-11e7-8af8-fcd381cfa20c.jpg',
+                'logo' => 'https://user-images.githubusercontent.com/51840849/87460810-1dd06c00-c616-11ea-9276-956f400d6ffa.jpg',
                 'api' => 'https://mixcoins.com/api',
                 'www' => 'https://mixcoins.com',
                 'doc' => 'https://mixcoins.com/help/api/',

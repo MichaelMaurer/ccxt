@@ -11,14 +11,21 @@ use \ccxt\ExchangeError;
 class coingi extends Exchange {
 
     public function describe() {
-        return array_replace_recursive(parent::describe (), array(
+        return $this->deep_extend(parent::describe (), array(
             'id' => 'coingi',
             'name' => 'Coingi',
             'rateLimit' => 1000,
             'countries' => array( 'PA', 'BG', 'CN', 'US' ), // Panama, Bulgaria, China, US
             'has' => array(
+                'cancelOrder' => true,
                 'CORS' => false,
+                'createOrder' => true,
+                'fetchBalance' => true,
+                'fetchMarkets' => true,
+                'fetchOrderBook' => true,
+                'fetchTicker' => true,
                 'fetchTickers' => true,
+                'fetchTrades' => true,
             ),
             'urls' => array(
                 'referral' => 'https://www.coingi.com/?r=XTPPMC',
@@ -228,7 +235,7 @@ class coingi extends Exchange {
             }
             $result[$symbol] = $this->parse_ticker($ticker, $market);
         }
-        return $result;
+        return $this->filter_by_array($result, 'symbol', $symbols);
     }
 
     public function fetch_ticker($symbol, $params = array ()) {
@@ -252,13 +259,7 @@ class coingi extends Exchange {
         $timestamp = $this->safe_integer($trade, 'timestamp');
         $id = $this->safe_string($trade, 'id');
         $marketId = $this->safe_string($trade, 'currencyPair');
-        if (is_array($this->markets_by_id) && array_key_exists($marketId, $this->markets_by_id)) {
-            $market = $this->markets_by_id[$marketId];
-        }
-        $symbol = null;
-        if ($market !== null) {
-            $symbol = $market['symbol'];
-        }
+        $symbol = $this->safe_symbol($marketId, $market);
         return array(
             'id' => $id,
             'info' => $trade,

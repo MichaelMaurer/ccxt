@@ -7,6 +7,7 @@ from ccxt.base.exchange import Exchange
 import hashlib
 from ccxt.base.errors import ExchangeError
 from ccxt.base.errors import AuthenticationError
+from ccxt.base.errors import ArgumentsRequired
 
 
 class itbit(Exchange):
@@ -19,9 +20,20 @@ class itbit(Exchange):
             'rateLimit': 2000,
             'version': 'v1',
             'has': {
+                'cancelOrder': True,
                 'CORS': True,
                 'createMarketOrder': False,
+                'createOrder': True,
+                'fetchBalance': True,
+                'fetchClosedOrders': True,
                 'fetchMyTrades': True,
+                'fetchOpenOrders': True,
+                'fetchOrder': True,
+                'fetchOrderBook': True,
+                'fetchOrders': True,
+                'fetchTicker': True,
+                'fetchTrades': True,
+                'fetchTransactions': True,
             },
             'urls': {
                 'logo': 'https://user-images.githubusercontent.com/1294454/27822159-66153620-60ad-11e7-89e7-005f6d7f3de0.jpg',
@@ -70,6 +82,9 @@ class itbit(Exchange):
                 'ETH/USD': {'id': 'ETHUSD', 'symbol': 'ETH/USD', 'base': 'ETH', 'quote': 'USD', 'baseId': 'ETH', 'quoteId': 'USD'},
                 'ETH/EUR': {'id': 'ETHEUR', 'symbol': 'ETH/EUR', 'base': 'ETH', 'quote': 'EUR', 'baseId': 'ETH', 'quoteId': 'EUR'},
                 'ETH/SGD': {'id': 'ETHSGD', 'symbol': 'ETH/SGD', 'base': 'ETH', 'quote': 'SGD', 'baseId': 'ETH', 'quoteId': 'SGD'},
+                'PAXGUSD': {'id': 'PAXGUSD', 'symbol': 'PAXG/USD', 'base': 'PAXG', 'quote': 'USD', 'baseId': 'PAXG', 'quoteId': 'USD'},
+                'BCHUSD': {'id': 'BCHUSD', 'symbol': 'BCH/USD', 'base': 'BCH', 'quote': 'USD', 'baseId': 'BCH', 'quoteId': 'USD'},
+                'LTCUSD': {'id': 'LTCUSD', 'symbol': 'LTC/USD', 'base': 'LTC', 'quote': 'USD', 'baseId': 'LTC', 'quoteId': 'USD'},
             },
             'fees': {
                 'trading': {
@@ -204,6 +219,7 @@ class itbit(Exchange):
             'price': price,
             'amount': amount,
             'cost': cost,
+            'fee': None,
         }
         if feeCost is not None:
             if rebatesApplied is not None:
@@ -238,7 +254,7 @@ class itbit(Exchange):
         self.load_markets()
         walletId = self.safe_string(params, 'walletId')
         if walletId is None:
-            raise ExchangeError(self.id + ' fetchMyTrades requires a walletId parameter')
+            raise ArgumentsRequired(self.id + ' fetchMyTrades requires a walletId parameter')
         request = {
             'walletId': walletId,
         }
@@ -484,6 +500,7 @@ class itbit(Exchange):
             'status': self.parse_order_status(self.safe_string(order, 'status')),
             'symbol': symbol,
             'type': type,
+            'timeInForce': None,
             'side': side,
             'price': price,
             'cost': cost,
@@ -493,6 +510,7 @@ class itbit(Exchange):
             'remaining': remaining,
             'fee': fee,
             # 'trades': self.parse_trades(order['trades'], market),
+            'trades': None,
         }
 
     def nonce(self):
@@ -562,7 +580,7 @@ class itbit(Exchange):
             binhash = self.binary_concat(binaryUrl, hash)
             signature = self.hmac(binhash, self.encode(self.secret), hashlib.sha512, 'base64')
             headers = {
-                'Authorization': self.apiKey + ':' + self.decode(signature),
+                'Authorization': self.apiKey + ':' + signature,
                 'Content-Type': 'application/json',
                 'X-Auth-Timestamp': timestamp,
                 'X-Auth-Nonce': nonce,

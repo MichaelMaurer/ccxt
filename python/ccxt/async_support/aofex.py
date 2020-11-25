@@ -24,7 +24,7 @@ class aofex(Exchange):
         return self.deep_extend(super(aofex, self).describe(), {
             'id': 'aofex',
             'name': 'AOFEX',
-            'countries': ['GB', 'CN'],
+            'countries': ['GB'],
             'rateLimit': 1000,
             'has': {
                 'fetchMarkets': True,
@@ -41,6 +41,7 @@ class aofex(Exchange):
                 'fetchOpenOrders': True,
                 'fetchClosedOrders': True,
                 'fetchClosedOrder': True,
+                'fetchOrderTrades': True,
                 'fetchTradingFee': True,
             },
             'timeframes': {
@@ -234,7 +235,7 @@ class aofex(Exchange):
             })
         return result
 
-    def parse_ohlcv(self, ohlcv, market=None, timeframe='5m', since=None, limit=None):
+    def parse_ohlcv(self, ohlcv, market=None):
         #
         #     {
         #         id:  1584950100,
@@ -302,7 +303,7 @@ class aofex(Exchange):
         #
         result = self.safe_value(response, 'result', {})
         data = self.safe_value(result, 'data', [])
-        return self.parse_ohlcvs(data, market, timeframe, since, limit)
+        return self.parse_ohlcvs(data, market, since, limit)
 
     async def fetch_balance(self, params={}):
         await self.load_markets()
@@ -420,11 +421,9 @@ class aofex(Exchange):
         percentage = change / open * 100
         baseVolume = self.safe_float(ticker, 'amount')
         quoteVolume = self.safe_float(ticker, 'vol')
-        vwap = None
-        if quoteVolume is not None:
-            if baseVolume is not None:
-                if baseVolume > 0:
-                    vwap = float(self.price_to_precision(symbol, quoteVolume / baseVolume))
+        vwap = self.vwap(baseVolume, quoteVolume)
+        if vwap is not None:
+            vwap = float(self.price_to_precision(symbol, vwap))
         return {
             'symbol': symbol,
             'timestamp': timestamp,
@@ -480,21 +479,10 @@ class aofex(Exchange):
         result = {}
         for i in range(0, len(tickers)):
             marketId = self.safe_string(tickers[i], 'symbol')
-            market = None
-            symbol = marketId
-            if marketId is not None:
-                if marketId in self.markets_by_id:
-                    market = self.markets_by_id[marketId]
-                    symbol = market['symbol']
-                else:
-                    baseId, quoteId = marketId.split('-')
-                    base = self.safe_currency_code(baseId)
-                    quote = self.safe_currency_code(quoteId)
-                    symbol = base + '/' + quote
+            market = self.safe_market(marketId, None, '-')
+            symbol = market['symbol']
             data = self.safe_value(tickers[i], 'data', {})
-            ticker = self.parse_ticker(data, market)
-            ticker['symbol'] = symbol
-            result[symbol] = ticker
+            result[symbol] = self.parse_ticker(data, market)
         return self.filter_by_array(result, 'symbol', symbols)
 
     async def fetch_ticker(self, symbol, params={}):
@@ -548,7 +536,7 @@ class aofex(Exchange):
         #
         id = self.safe_string(trade, 'id')
         ctime = self.parse8601(self.safe_string(trade, 'ctime'))
-        timestamp = self.safe_timestamp(trade, 'ts', ctime)
+        timestamp = self.safe_timestamp(trade, 'ts', ctime) - 28800000  # 8 hours, adjust to UTC
         symbol = None
         if (symbol is None) and (market is not None):
             symbol = market['symbol']
@@ -687,23 +675,11 @@ class aofex(Exchange):
         id = self.safe_string(order, 'order_sn')
         orderStatus = self.safe_string(order, 'status')
         status = self.parse_order_status(orderStatus)
-        symbol = None
         marketId = self.safe_string(order, 'symbol')
-        base = None
-        quote = None
-        if marketId is not None:
-            if marketId in self.markets_by_id:
-                market = self.markets_by_id[marketId]
-            else:
-                baseId, quoteId = marketId.split('-')
-                base = self.safe_currency_code(baseId)
-                quote = self.safe_currency_code(quoteId)
-                symbol = base + '/' + quote
-        if (symbol is None) and (market is not None):
-            symbol = market['symbol']
-            base = market['base']
-            quote = market['quote']
+        market = self.safe_market(marketId, market, '-')
         timestamp = self.parse8601(self.safe_string(order, 'ctime'))
+        if timestamp is not None:
+            timestamp -= 28800000  # 8 hours, adjust to UTC
         orderType = self.safe_string(order, 'type')
         type = 'limit' if (orderType == '2') else 'market'
         side = self.safe_string(order, 'side')
@@ -760,7 +736,7 @@ class aofex(Exchange):
                     if filled > 0:
                         average = cost / filled
                 if feeCost is not None:
-                    feeCurrencyCode = base if (side == 'buy') else quote
+                    feeCurrencyCode = market['base'] if (side == 'buy') else market['quote']
                     fee = {
                         'cost': feeCost,
                         'currency': feeCurrencyCode,
@@ -787,8 +763,9 @@ class aofex(Exchange):
             'datetime': self.iso8601(timestamp),
             'lastTradeTimestamp': lastTradeTimestamp,
             'status': status,
-            'symbol': symbol,
+            'symbol': market['symbol'],
             'type': type,
+            'timeInForce': None,
             'side': side,
             'price': price,
             'cost': cost,
@@ -843,11 +820,15 @@ class aofex(Exchange):
         order['trades'] = trades
         return self.parse_order(order)
 
+    async def fetch_order_trades(self, id, symbol=None, since=None, limit=None, params={}):
+        response = await self.fetch_closed_order(id, symbol, params)
+        return self.safe_value(response, 'trades', [])
+
     async def fetch_orders_with_method(self, method, symbol=None, since=None, limit=None, params={}):
         await self.load_markets()
         request = {
             # 'from': 'BM7442641584965237751ZMAKJ5',  # query start order_sn
-            # 'direct': 'prev',  # next
+            'direct': 'prev',  # next
         }
         market = None
         if symbol is not None:
@@ -970,6 +951,7 @@ class aofex(Exchange):
             'remaining': None,
             'trades': None,
             'fee': None,
+            'clientOrderId': None,
         }
 
     async def cancel_all_orders(self, symbol=None, params={}):

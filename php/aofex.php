@@ -14,10 +14,10 @@ use \ccxt\OrderNotFound;
 class aofex extends Exchange {
 
     public function describe() {
-        return array_replace_recursive(parent::describe (), array(
+        return $this->deep_extend(parent::describe (), array(
             'id' => 'aofex',
             'name' => 'AOFEX',
-            'countries' => array( 'GB', 'CN' ),
+            'countries' => array( 'GB' ),
             'rateLimit' => 1000,
             'has' => array(
                 'fetchMarkets' => true,
@@ -34,6 +34,7 @@ class aofex extends Exchange {
                 'fetchOpenOrders' => true,
                 'fetchClosedOrders' => true,
                 'fetchClosedOrder' => true,
+                'fetchOrderTrades' => true,
                 'fetchTradingFee' => true,
             ),
             'timeframes' => array(
@@ -230,7 +231,7 @@ class aofex extends Exchange {
         return $result;
     }
 
-    public function parse_ohlcv($ohlcv, $market = null, $timeframe = '5m', $since = null, $limit = null) {
+    public function parse_ohlcv($ohlcv, $market = null) {
         //
         //     {
         //         id =>  1584950100,
@@ -300,7 +301,7 @@ class aofex extends Exchange {
         //
         $result = $this->safe_value($response, 'result', array());
         $data = $this->safe_value($result, 'data', array());
-        return $this->parse_ohlcvs($data, $market, $timeframe, $since, $limit);
+        return $this->parse_ohlcvs($data, $market, $since, $limit);
     }
 
     public function fetch_balance($params = array ()) {
@@ -417,7 +418,7 @@ class aofex extends Exchange {
         $last = $this->safe_float($ticker, 'close');
         $change = null;
         if ($symbol !== null) {
-            $change = floatval ($this->price_to_precision($symbol, $last - $open));
+            $change = floatval($this->price_to_precision($symbol, $last - $open));
         } else {
             $change = $last - $open;
         }
@@ -425,13 +426,9 @@ class aofex extends Exchange {
         $percentage = $change / $open * 100;
         $baseVolume = $this->safe_float($ticker, 'amount');
         $quoteVolume = $this->safe_float($ticker, 'vol');
-        $vwap = null;
-        if ($quoteVolume !== null) {
-            if ($baseVolume !== null) {
-                if ($baseVolume > 0) {
-                    $vwap = floatval ($this->price_to_precision($symbol, $quoteVolume / $baseVolume));
-                }
-            }
+        $vwap = $this->vwap($baseVolume, $quoteVolume);
+        if ($vwap !== null) {
+            $vwap = floatval($this->price_to_precision($symbol, $vwap));
         }
         return array(
             'symbol' => $symbol,
@@ -490,23 +487,10 @@ class aofex extends Exchange {
         $result = array();
         for ($i = 0; $i < count($tickers); $i++) {
             $marketId = $this->safe_string($tickers[$i], 'symbol');
-            $market = null;
-            $symbol = $marketId;
-            if ($marketId !== null) {
-                if (is_array($this->markets_by_id) && array_key_exists($marketId, $this->markets_by_id)) {
-                    $market = $this->markets_by_id[$marketId];
-                    $symbol = $market['symbol'];
-                } else {
-                    list($baseId, $quoteId) = explode('-', $marketId);
-                    $base = $this->safe_currency_code($baseId);
-                    $quote = $this->safe_currency_code($quoteId);
-                    $symbol = $base . '/' . $quote;
-                }
-            }
+            $market = $this->safe_market($marketId, null, '-');
+            $symbol = $market['symbol'];
             $data = $this->safe_value($tickers[$i], 'data', array());
-            $ticker = $this->parse_ticker($data, $market);
-            $ticker['symbol'] = $symbol;
-            $result[$symbol] = $ticker;
+            $result[$symbol] = $this->parse_ticker($data, $market);
         }
         return $this->filter_by_array($result, 'symbol', $symbols);
     }
@@ -563,7 +547,7 @@ class aofex extends Exchange {
         //
         $id = $this->safe_string($trade, 'id');
         $ctime = $this->parse8601($this->safe_string($trade, 'ctime'));
-        $timestamp = $this->safe_timestamp($trade, 'ts', $ctime);
+        $timestamp = $this->safe_timestamp($trade, 'ts', $ctime) - 28800000; // 8 hours, adjust to UTC;
         $symbol = null;
         if (($symbol === null) && ($market !== null)) {
             $symbol = $market['symbol'];
@@ -668,7 +652,7 @@ class aofex extends Exchange {
         //
         //     {
         //         "order_sn" => "BL74426415849672087836G48N1",
-        //         "$symbol" => "ETH-USDT",
+        //         "symbol" => "ETH-USDT",
         //         "ctime" => "2020-03-23 20:40:08",
         //         "$type" => 2,
         //         "$side" => "buy",
@@ -684,7 +668,7 @@ class aofex extends Exchange {
         //
         //     {
         //         order_sn => 'BM7442641584965237751ZMAKJ5',
-        //         $symbol => 'ETH-USDT',
+        //         symbol => 'ETH-USDT',
         //         ctime => '2020-03-23 20:07:17',
         //         $type => 1,
         //         $side => 'buy',
@@ -710,26 +694,12 @@ class aofex extends Exchange {
         $id = $this->safe_string($order, 'order_sn');
         $orderStatus = $this->safe_string($order, 'status');
         $status = $this->parse_order_status($orderStatus);
-        $symbol = null;
         $marketId = $this->safe_string($order, 'symbol');
-        $base = null;
-        $quote = null;
-        if ($marketId !== null) {
-            if (is_array($this->markets_by_id) && array_key_exists($marketId, $this->markets_by_id)) {
-                $market = $this->markets_by_id[$marketId];
-            } else {
-                list($baseId, $quoteId) = explode('-', $marketId);
-                $base = $this->safe_currency_code($baseId);
-                $quote = $this->safe_currency_code($quoteId);
-                $symbol = $base . '/' . $quote;
-            }
-        }
-        if (($symbol === null) && ($market !== null)) {
-            $symbol = $market['symbol'];
-            $base = $market['base'];
-            $quote = $market['quote'];
-        }
+        $market = $this->safe_market($marketId, $market, '-');
         $timestamp = $this->parse8601($this->safe_string($order, 'ctime'));
+        if ($timestamp !== null) {
+            $timestamp -= 28800000; // 8 hours, adjust to UTC
+        }
         $orderType = $this->safe_string($order, 'type');
         $type = ($orderType === '2') ? 'limit' : 'market';
         $side = $this->safe_string($order, 'side');
@@ -793,7 +763,7 @@ class aofex extends Exchange {
                     }
                 }
                 if ($feeCost !== null) {
-                    $feeCurrencyCode = ($side === 'buy') ? $base : $quote;
+                    $feeCurrencyCode = ($side === 'buy') ? $market['base'] : $market['quote'];
                     $fee = array(
                         'cost' => $feeCost,
                         'currency' => $feeCurrencyCode,
@@ -829,8 +799,9 @@ class aofex extends Exchange {
             'datetime' => $this->iso8601($timestamp),
             'lastTradeTimestamp' => $lastTradeTimestamp,
             'status' => $status,
-            'symbol' => $symbol,
+            'symbol' => $market['symbol'],
             'type' => $type,
+            'timeInForce' => null,
             'side' => $side,
             'price' => $price,
             'cost' => $cost,
@@ -887,11 +858,16 @@ class aofex extends Exchange {
         return $this->parse_order($order);
     }
 
+    public function fetch_order_trades($id, $symbol = null, $since = null, $limit = null, $params = array ()) {
+        $response = $this->fetch_closed_order($id, $symbol, $params);
+        return $this->safe_value($response, 'trades', array());
+    }
+
     public function fetch_orders_with_method($method, $symbol = null, $since = null, $limit = null, $params = array ()) {
         $this->load_markets();
         $request = array(
             // 'from' => 'BM7442641584965237751ZMAKJ5', // query start order_sn
-            // 'direct' => 'prev', // next
+            'direct' => 'prev', // next
         );
         $market = null;
         if ($symbol !== null) {
@@ -1025,6 +1001,7 @@ class aofex extends Exchange {
             'remaining' => null,
             'trades' => null,
             'fee' => null,
+            'clientOrderId' => null,
         );
     }
 
