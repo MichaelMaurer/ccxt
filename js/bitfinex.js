@@ -346,7 +346,9 @@ module.exports = class bitfinex extends Exchange {
                     'AIO': 'aio',
                     'ANT': 'ant',
                     'AST': 'ast', // MJM added
+                    'ATOM': 'ato', // MJM added
                     'AVT': 'aventus', // #1811
+                    'BAL': 'bal', // MJM added
                     'BAT': 'bat',
                     // https://github.com/ccxt/ccxt/issues/5833
                     'BCH': 'bab', // undocumented
