@@ -357,21 +357,23 @@ module.exports = class bitfinex extends Exchange {
             'precisionMode': SIGNIFICANT_DIGITS,
             'options': {
                 'currencyNames': {
+                    // MJM for currency names see https://api-pub.bitfinex.com//v2/conf/pub:map:tx:method
                     'AGI': 'agi',
                     'AID': 'aid',
                     'AIO': 'aio',
                     'ANT': 'ant',
                     'AST': 'ast', // MJM added
                     'ATOM': 'ato', // MJM added
+                    'AVAX': 'avax', // MJM added
                     'AVT': 'aventus', // #1811
                     'BAL': 'bal', // MJM added
+                    'BAND': 'band', // MJM added
                     'BAT': 'bat',
                     // https://github.com/ccxt/ccxt/issues/5833
                     'BCH': 'bab', // undocumented
                     // 'BCH': 'bcash', // undocumented
                     'BCHABC': 'bab', // MJM added
                     'BCHSV': 'bsv', // MJM added
-                    'BSV': 'bsv', // MJM added
                     'BCI': 'bci',
                     'BFT': 'bft',
                     'BSV': 'bsv',
@@ -383,6 +385,7 @@ module.exports = class bitfinex extends Exchange {
                     'DADI': 'dad',
                     'DASH': 'dash',
                     'DATA': 'datacoin',
+                    'DOT': 'dot', // MJM added
                     'DTH': 'dth',
                     'EDO': 'eidoo', // #1811
                     'ELF': 'elf',
@@ -390,6 +393,7 @@ module.exports = class bitfinex extends Exchange {
                     'ETC': 'ethereumc',
                     'ETH': 'ethereum',
                     'ETP': 'metaverse',
+                    'FIL': 'fil', // MJM added
                     'FUN': 'fun',
                     'GNT': 'golem',
                     'IOST': 'ios',
@@ -420,16 +424,19 @@ module.exports = class bitfinex extends Exchange {
                     'SAN': 'santiment',
                     'SNGLS': 'sng',
                     'SNT': 'status',
+                    'SNX': 'snx', // MJM added
                     'SPANK': 'spk',
                     'STORJ': 'stj',
+                    'SUSHI': 'sushi', // MJM added
                     'TNB': 'tnb',
                     'TRX': 'trx',
                     'TUSD': 'tsd',
+                    'UNI': 'uni', // MJM added
                     'USD': 'wire',
                     'USDC': 'udc', // https://github.com/ccxt/ccxt/issues/5833
                     'UTK': 'utk',
-                    'USDT': 'tetheruso', // Tether on Omni
-                    // 'USDT': 'tetheruse', // Tether on ERC20
+                    // 'USDT': 'tetheruso', // Tether on Omni // MJM disabled
+                    'USDT': 'tetheruse', // Tether on ERC20 // MJM enabled
                     // 'USDT': 'tetherusl', // Tether on Liquid
                     // 'USDT': 'tetherusx', // Tether on Tron
                     // 'USDT': 'tetheruss', // Tether on EOS
@@ -439,6 +446,7 @@ module.exports = class bitfinex extends Exchange {
                     'XMR': 'monero',
                     'XRP': 'ripple',
                     'XVG': 'xvg',
+                    'YFI': 'yfi', // MJM added
                     'YOYOW': 'yoyow',
                     'ZEC': 'zcash',
                     'ZRX': 'zrx',

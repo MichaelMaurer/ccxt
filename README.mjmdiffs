@@ -27,6 +27,7 @@ $ git commit -m "..."
 3/22/2018 Merge: 742500b92343b2665154ea86790f8e674c632819 v1.11.150
 9/8/2018 Merge: 5e37a27d0fed099c6fa1fb821beac9f9be722d78 v1.17.243
 3/27/2020 Merge: 6b0ab8eb32b66d621bc1dcf09b744aaade11a3a1 v1.25.31
+11/25/2020 Merge: d9dc9320aacaab49108cc6887ef311db24999ee4 v1.38.20
 
 Verbose logging
 ---------------
